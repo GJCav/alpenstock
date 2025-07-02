@@ -1,0 +1,1 @@
+from .configure_loguru import LoguruInitalizer, logger
