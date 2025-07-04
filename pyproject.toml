@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ipykernel"]
+dev = ["ipykernel", "lmdb"]
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
