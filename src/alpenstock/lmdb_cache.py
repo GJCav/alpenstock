@@ -1,6 +1,13 @@
 import pickle
 from typing import Any
-import lmdb
+
+try:
+    import lmdb
+except ImportError:
+    raise ImportError(
+        "Please install the 'lmdb' package to use LMDBCache. "
+        "You can do this by running 'pip install lmdb'."
+    )
 
 
 class LMDBCache:
