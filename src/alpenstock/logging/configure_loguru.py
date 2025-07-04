@@ -82,8 +82,8 @@ class LoguruInitalizer:
                 format=msg_format
             )
 
-        logger.level("INFO", color="<cyan>")
-        logger.level("DEBUG", color="")
+        logger.level("INFO", color="")
+        logger.level("DEBUG", color="<fg #9fcce0>")
         logger.level("TRACE", color="<light-black>")
 
         _loguru_initialized_pids[pid] = True
