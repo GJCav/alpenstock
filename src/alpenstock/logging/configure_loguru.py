@@ -35,6 +35,7 @@ class LoguruInitalizer:
         self._level = "INFO"
         
         self._serialize_to_file = None
+        self._enqueue = True
     
 
     @validate_call
@@ -71,7 +72,7 @@ class LoguruInitalizer:
             sys.__stderr__,
             colorize=True,
             level=self._level, 
-            enqueue=True,
+            enqueue=self._enqueue,
             format=msg_format
         )
 
@@ -106,12 +107,19 @@ class LoguruInitalizer:
     def set_level(self, level: LogLevel | int):
         self._level = level
         return self
+    
+    
+    @validate_call
+    def set_enqueue(self, enqueue: bool = True):
+        self._enqueue = enqueue
+        return self
 
 
     def serialize_to_file(
             self, 
             file_path: str, 
             level: LogLevel | int = "DEBUG",
+            enqueue: bool = True,
             rotation: str = None,
             rentention: str = None,
             compression: str = None
@@ -119,7 +127,7 @@ class LoguruInitalizer:
         self._serialize_to_file = dict(
             sink=file_path,
             level=level,
-            enqueue=True,
+            enqueue=enqueue,
             colorize=False,
 
             serialize=True,
