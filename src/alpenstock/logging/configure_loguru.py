@@ -25,6 +25,11 @@ _loguru_initialized_pids = {}
 
 
 class LoguruInitalizer:
+    _BRIEF_FMT_SECTIONS = [_TIME_SEC, _LVL_SEC, _MSG_SEC]
+    _FULL_FMT_SECTIONS = [_TIME_SEC, _LVL_SEC, _LOC_SEC, _THD_SEC, _MSG_SEC]
+    BRIEF_FMT = "|".join(_BRIEF_FMT_SECTIONS)
+    FULL_FMT = "|".join(_FULL_FMT_SECTIONS)
+
     def __init__(self):
         self._fmt_sections = []
         self._level = "INFO"
@@ -85,24 +90,14 @@ class LoguruInitalizer:
 
     
     def preset_brief(self):
-        self._fmt_sections = [
-            _TIME_SEC,
-            _LVL_SEC,
-            _MSG_SEC
-        ]
+        self._fmt_sections = self._BRIEF_FMT_SECTIONS.copy()
 
         self._level = "INFO"
         return self
     
 
     def preset_full(self):
-        self._fmt_sections = [
-            _TIME_SEC,
-            _LVL_SEC,
-            _LOC_SEC,
-            _THD_SEC,
-            _MSG_SEC
-        ]
+        self._fmt_sections = self._FULL_FMT_SECTIONS.copy()
         self._level = "DEBUG"
         return self
 
