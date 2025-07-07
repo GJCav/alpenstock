@@ -10,7 +10,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ipykernel", "lmdb"]
+dev = [
+    "ipykernel", 
+    "lmdb",
+    "mkdocs-material",
+    "mkdocstrings[python]",
+    "mkdocs-jupyter",
+    "mkdocs-gen-files",
+    "mkdocs-awesome-nav",
+    "mkdocs-glightbox",
+    "mkdocs-api-autonav",
+    "griffe-pydantic",
+    "griffe-warnings-deprecated"
+]
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]

@@ -1,0 +1,96 @@
+site_name: Alpenstock
+repo_url: https://github.com/GJCav/alpenstock
+repo_name: GJCav/alpenstock
+
+extra_css:
+  - css/mkdocstrings-beautify.css
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tracking
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+  palette:
+    # Copied from https://github.com/liblaf/grapes/blob/0936c98839bef9a65d0b3187c671f0433d75ab9c/.config/copier/mkdocs.yaml#L60-L79
+    # My roommate insisted strongly on a dark mode, so I made it.
+    - media: (prefers-color-scheme)
+      toggle:
+        icon: material/brightness-auto
+        name: Auto
+    - scheme: default
+      media: "(prefers-color-scheme: light)"
+      toggle:
+        icon: material/weather-sunny
+        name: Light Mode
+    - scheme: slate
+      primary: black
+      accent: lime
+      media: "(prefers-color-scheme: dark)"
+      toggle:
+        icon: material/weather-night
+        name: Dark Mode
+
+
+plugins:
+  - search:
+      lang: [en, zh]
+  - meta
+  - mkdocstrings:
+      handlers:
+        python:
+          inventories:
+            - https://docs.python.org/3/objects.inv
+          options:
+            show_root_heading: yes
+            show_source: False # Don't show the source code by default
+            find_stubs_package: true
+            show_inheritance_diagram: true
+            summary: true
+            show_if_no_docstring: true
+            merge_init_into_class: true
+
+            # Headings
+            heading_level: 1
+            show_root_heading: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+
+            # Signatures
+            modernize_annotations: true
+            show_signature_annotations: true
+            separate_signature: true
+            show_overloads: true
+            signature_crossrefs: true
+
+            extensions:
+              - griffe_pydantic:
+                  schema: true
+              - griffe_warnings_deprecated
+
+  - mkdocs-jupyter:
+      execute: False
+      include_source: True
+  # - gen-files:
+  #     scripts:
+  #       - scripts/link_examples_to_docs.py
+  - awesome-nav
+  - glightbox
+  - api-autonav:
+      modules: ["src/alpenstock"]
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - attr_list
+  - md_in_html
+  - pymdownx.blocks.caption
