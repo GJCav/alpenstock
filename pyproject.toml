@@ -6,13 +6,17 @@ version = "0.1.0"
 
 dependencies = [
     "loguru>=0.7.0",
-    "pydantic>=2.3.0"
+    "pydantic>=2.3.0",
+    "attrs"
 ]
 
 [project.optional-dependencies]
 dev = [
     "ipykernel", 
     "lmdb",
+    "numpy",
+    "torch", 
+    "pytest",
     "mkdocs-material",
     "mkdocstrings[python]",
     "mkdocs-jupyter",
