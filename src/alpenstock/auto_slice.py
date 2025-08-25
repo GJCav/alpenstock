@@ -122,6 +122,11 @@ def take_slice_hint(annotation) -> SliceHint | None:
 
 
 def default_slice_func(value: Any, key: Any, hint: SliceHint = None):
+    if not can_handle(value):
+        raise TypeError(
+            f"default auto-slicing does not support type {type(value)!r}"
+        )
+    
     if isinstance(value, SCALAR_TYPES):
         return copy.copy(value)
     elif isinstance(value, ARRAY_TYPES):
@@ -146,10 +151,6 @@ def _getitem_impl_for_attrs(self, key: Any):
     new_values = {}
     for field in fields:
         value = getattr(self, field.name)
-        if not can_handle(value):
-            raise TypeError(
-                f"Auto-slice does not support {field.name!r} of type {type(value)!r} in {cls!r}"
-            )
 
         slice_hint = take_slice_hint(cls_type_hints.get(field.name, None))
         slice_hint = slice_hint or SliceHint()
@@ -165,7 +166,10 @@ def _getitem_impl_for_attrs(self, key: Any):
             else:
                 raise ValueError(f"Unknown built-in slice function: {slice_func!r}")
 
-        new_values[field.name] = slice_func(value, key, hint=slice_hint)
+        try:
+            new_values[field.name] = slice_func(value, key, hint=slice_hint)
+        except Exception as e:
+            raise Exception("Unable to slice {field.name!r} of type {type(value)!r} in {cls!r}") from e
     return cls(**new_values)
 
 
@@ -202,7 +206,7 @@ class AutoSliceMixin:
     def __getitem__(self: Self, key: Any) -> Self:
         # Only allow slicing semantics and raise error for indexing
         if not isinstance(key, ARRAY_TYPES + (slice, range)):
-            raise TypeError(
+            raise ValueError(
                 f"`AutoSliceMixin` only supports slicing semantics, but key type of {type(key)!r} implies indexing"
             )
 
