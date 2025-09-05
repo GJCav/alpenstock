@@ -167,9 +167,9 @@ def _getitem_impl_for_attrs(self, key: Any):
                 raise ValueError(f"Unknown built-in slice function: {slice_func!r}")
 
         try:
-            new_values[field.name] = slice_func(value, key, hint=slice_hint)
+            new_values[field.alias] = slice_func(value, key, hint=slice_hint)
         except Exception as e:
-            raise Exception("Unable to slice {field.name!r} of type {type(value)!r} in {cls!r}") from e
+            raise Exception(f"Unable to slice {field.name!r} of type {type(value)!r} in {cls!r}") from e
     return cls(**new_values)
 
 
@@ -206,7 +206,7 @@ class AutoSliceMixin:
     def __getitem__(self: Self, key: Any) -> Self:
         # Only allow slicing semantics and raise error for indexing
         if not isinstance(key, ARRAY_TYPES + (slice, range)):
-            raise ValueError(
+            raise TypeError(
                 f"`AutoSliceMixin` only supports slicing semantics, but key type of {type(key)!r} implies indexing"
             )
 
