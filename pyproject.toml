@@ -39,3 +39,6 @@ alpenstock = { path = ".", editable = true }
 default = { features=["dev"], solve-group = "default" }
 
 [tool.pixi.tasks]
+
+[tool.pixi.dependencies]
+jaxtyping = "*"
