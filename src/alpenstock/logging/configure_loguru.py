@@ -69,7 +69,7 @@ class LoguruInitalizer:
         logger.remove()
 
         logger.add(
-            sys.__stderr__,
+            sys.stderr,
             colorize=True,
             level=self._level, 
             enqueue=self._enqueue,
