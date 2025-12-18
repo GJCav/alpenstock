@@ -1,38 +1,37 @@
-from typing import Any, Literal, get_type_hints, Self, Protocol
+from typing import Type, Any, Literal, get_type_hints, Self, Protocol
 from collections.abc import Sequence
-import functools
 import attrs
 import copy
 
 import pydantic
 
 ## Define supported scalar and array types
-SCALAR_TYPES = {int, float, str, bool, type(None)}
-ARRAY_TYPES = set([list, tuple])
+_SCALAR_TYPS: set[Type[Any]] = {int, float, str, bool, type(None)}
+_ARRAY_TYPES: set[Type[Any]] = set([list, tuple])
 
 try:
-    import numpy as np
+    import numpy as np  # type: ignore
 
-    ARRAY_TYPES.add(np.ndarray)
+    _ARRAY_TYPES.add(np.ndarray)
 except ImportError:
     np = None
 
 try:
-    import torch
+    import torch  # type: ignore
 
-    ARRAY_TYPES.add(torch.Tensor)
+    _ARRAY_TYPES.add(torch.Tensor)
 except ImportError:
     torch = None
 
 try:
-    import jax.numpy as jnp
+    import jax.numpy as jnp  # type: ignore
 
-    ARRAY_TYPES.add(jnp.ndarray)
+    _ARRAY_TYPES.add(jnp.ndarray)
 except ImportError:
     jnp = None
 
-SCALAR_TYPES = tuple(SCALAR_TYPES)
-ARRAY_TYPES = tuple(ARRAY_TYPES)
+SCALAR_TYPES: tuple[Type[Any], ...] = tuple(_SCALAR_TYPS)
+ARRAY_TYPES: tuple[Type[Any], ...] = tuple(_ARRAY_TYPES)
 
 
 ## Special type hints
@@ -64,34 +63,36 @@ def can_handle(value: Any) -> bool:
     return False
 
 
-def fancy_slice_for_builtin_list(arr, key, hint: SliceHint = None):
+def fancy_slice_for_builtin_list(arr, key, hint: SliceHint | None = None):
     if isinstance(key, slice):
         return arr[key]
-    
+
     # NumPy / Torch / Jax array-like support .tolist()
     if hasattr(key, "tolist"):
         key = key.tolist()
-        
+
     if isinstance(key, Sequence) and not isinstance(key, (str, bytes)):
-        if all(isinstance(i, bool) for i in key): 
+        if all(isinstance(i, bool) for i in key):
             # boolean mask
             return [x for x, m in zip(arr, key) if m]
         else:
             # assume index-array
             return [arr[i] for i in key]
-    
-    return np.take(arr, key, axis=0)
+
+    raise TypeError("Unsupported type for fancy slicing of built-in list")
 
 
-def slice_array(arr, key, hint: SliceHint = None):
+def slice_array(arr, key, hint: SliceHint | None = None):
     if hint is None:
         hint = SliceHint()
 
     axis = hint.axis
-    
+
     if isinstance(arr, list):
         if axis != 0:
-            raise ValueError(f"SliceHint(axis={axis}) is invalid for Python built-in list")
+            raise ValueError(
+                f"SliceHint(axis={axis}) is invalid for Python built-in list"
+            )
         return fancy_slice_for_builtin_list(arr, key)
 
     if np is not None and isinstance(arr, np.ndarray):
@@ -103,7 +104,7 @@ def slice_array(arr, key, hint: SliceHint = None):
         sl = [slice(None)] * arr.ndim
         if isinstance(key, ARRAY_TYPES):
             key = torch.as_tensor(key, device=arr.device)
-        sl[axis] = key
+        sl[axis] = key # type: ignore
         return arr[tuple(sl)]
 
     if jnp is not None and isinstance(arr, jnp.ndarray):
@@ -121,12 +122,10 @@ def take_slice_hint(annotation) -> SliceHint | None:
     return None
 
 
-def default_slice_func(value: Any, key: Any, hint: SliceHint = None):
+def default_slice_func(value: Any, key: Any, hint: SliceHint | None = None):
     if not can_handle(value):
-        raise TypeError(
-            f"default auto-slicing does not support type {type(value)!r}"
-        )
-    
+        raise TypeError(f"default auto-slicing does not support type {type(value)!r}")
+
     if isinstance(value, SCALAR_TYPES):
         return copy.copy(value)
     elif isinstance(value, ARRAY_TYPES):
@@ -137,11 +136,13 @@ def default_slice_func(value: Any, key: Any, hint: SliceHint = None):
         raise RuntimeError("Unreachable")
 
 
-def native_slice_func(value: Any, key: Any, hint: SliceHint = None):
+def native_slice_func(value: Any, key: Any, hint: SliceHint | None = None):
     return value[key]
 
-def copy_slice_func(value: Any, key: Any, hint: SliceHint = None):
+
+def copy_slice_func(value: Any, key: Any, hint: SliceHint | None = None):
     return copy.copy(value)
+
 
 def _getitem_impl_for_attrs(self, key: Any):
     cls = type(self)
@@ -169,7 +170,9 @@ def _getitem_impl_for_attrs(self, key: Any):
         try:
             new_values[field.alias] = slice_func(value, key, hint=slice_hint)
         except Exception as e:
-            raise Exception(f"Unable to slice {field.name!r} of type {type(value)!r} in {cls!r}") from e
+            raise Exception(
+                f"Unable to slice {field.name!r} of type {type(value)!r} in {cls!r}"
+            ) from e
     return cls(**new_values)
 
 
@@ -219,6 +222,3 @@ class AutoSliceMixin:
             raise TypeError(
                 f"`AutoSliceMixin` only supports classes defined with `attrs` or inheriting from `pydantic.BaseModel`, but got {cls!r}"
             )
-
-
-__all__ = ["AutoSliceMixin", "SliceHint", "SliceFunc"]
