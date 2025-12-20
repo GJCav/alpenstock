@@ -3,6 +3,7 @@ authors = [{name = "jcav", email = "micojcav@outlook.com"}]
 name = "alpenstock"
 requires-python = ">= 3.11"
 version = "1.0.0"
+readme = "README.md"
 
 dependencies = [
     "loguru>=0.7.0",
@@ -27,7 +28,9 @@ dev = [
     "mkdocs-glightbox",
     "mkdocs-api-autonav",
     "griffe-pydantic",
-    "griffe-warnings-deprecated"
+    "griffe-warnings-deprecated",
+    "build",
+    "twine"
 ]
 
 [tool.pixi.workspace]
