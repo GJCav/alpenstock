@@ -2,7 +2,7 @@
 authors = [{name = "jcav", email = "micojcav@outlook.com"}]
 name = "alpenstock"
 requires-python = ">= 3.11"
-version = "0.1.0"
+version = "1.0.0"
 
 dependencies = [
     "loguru>=0.7.0",

@@ -1,4 +1,4 @@
-from .mixin import AutoSliceMixin, SliceHint, SliceFunc
+from ._mixin import AutoSliceMixin, SliceHint, SliceFunc
 
 
 __all__ = [

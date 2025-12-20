@@ -2,36 +2,12 @@ from typing import Type, Any, Literal, get_type_hints, Self, Protocol
 from collections.abc import Sequence
 import attrs
 import copy
-
+from ._types import COMMON_ND_ARRAYS, np, torch, jnp
 import pydantic
 
 ## Define supported scalar and array types
-_SCALAR_TYPS: set[Type[Any]] = {int, float, str, bool, type(None)}
-_ARRAY_TYPES: set[Type[Any]] = set([list, tuple])
-
-try:
-    import numpy as np  # type: ignore
-
-    _ARRAY_TYPES.add(np.ndarray)
-except ImportError:
-    np = None
-
-try:
-    import torch  # type: ignore
-
-    _ARRAY_TYPES.add(torch.Tensor)
-except ImportError:
-    torch = None
-
-try:
-    import jax.numpy as jnp  # type: ignore
-
-    _ARRAY_TYPES.add(jnp.ndarray)
-except ImportError:
-    jnp = None
-
-SCALAR_TYPES: tuple[Type[Any], ...] = tuple(_SCALAR_TYPS)
-ARRAY_TYPES: tuple[Type[Any], ...] = tuple(_ARRAY_TYPES)
+SCALAR_TYPES: tuple[Type[Any], ...] = (int, float, str, bool, type(None))
+ARRAY_TYPES: tuple[Type[Any], ...] = (list, tuple) + COMMON_ND_ARRAYS
 
 
 ## Special type hints
@@ -104,7 +80,7 @@ def slice_array(arr, key, hint: SliceHint | None = None):
         sl = [slice(None)] * arr.ndim
         if isinstance(key, ARRAY_TYPES):
             key = torch.as_tensor(key, device=arr.device)
-        sl[axis] = key # type: ignore
+        sl[axis] = key  # type: ignore
         return arr[tuple(sl)]
 
     if jnp is not None and isinstance(arr, jnp.ndarray):
