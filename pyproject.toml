@@ -2,7 +2,7 @@
 authors = [{name = "jcav", email = "micojcav@outlook.com"}]
 name = "alpenstock"
 requires-python = ">= 3.11"
-version = "1.1.0"
+version = "1.2.0"
 readme = "README.md"
 
 dependencies = [
@@ -11,6 +11,7 @@ dependencies = [
     "attrs",
     "jaxtyping",
     "wadler-lindig",
+    "ruamel-yaml>=0.18",
 ]
 
 [project.optional-dependencies]
