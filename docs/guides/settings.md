@@ -1,6 +1,6 @@
 # Comment Preserved Settings Management
 
-The [`alpenstock.settings`](/reference/alpenstock/settings/) module adds YAML capabilities to `Pydantic`, which is an excellent library for data validation and settings management with Python type annotations. This module distinguishes itself from related libraries by the following features:
+The [`alpenstock.settings`](/alpenstock/reference/alpenstock/settings/) module adds YAML capabilities to `Pydantic`, which is an excellent library for data validation and settings management with Python type annotations. This module distinguishes itself from related libraries by the following features:
 
 - **Comment Preservation**: All comments in the YAML files are preserved when loading and saving settings. Users are free to add comments to their configuration files, enhancing readability and maintainability. And developers can programmatically modify settings while keeping user comments intact.
 - **Default Commenting**: The module allows developers to define default comments for each setting directly in the `Pydantic` model using the `description` attribute of `Field`. On saving, developers can choose to include these comments in the output YAML file, providing context and guidance for users. Note that when user-defined comments exist, they are preserved instead of being overwritten by default comments.
@@ -51,7 +51,7 @@ class HttpSrv(Settings):
 **Key points**:
 
 - All settings-related classes should inherit from
-  [`alpenstock.settings.Settings`](/reference/alpenstock/settings/#alpenstock.settings.Settings).
+  [`alpenstock.settings.Settings`](/alpenstock/reference/alpenstock/settings/#alpenstock.settings.Settings).
   This base class extends `Pydantic`'s `BaseModel` with YAML-specific
   functionality.
 - You may attach comments to each field using the `description` attribute of
@@ -98,14 +98,14 @@ srv:
 **Key points:**
 
 - The
-  [`to_yaml`](/reference/alpenstock/settings/#alpenstock.settings.Settings.to_yaml)
+  [`to_yaml`](/alpenstock/reference/alpenstock/settings/#alpenstock.settings.Settings.to_yaml)
   method is used to serialize the settings model to a YAML. Depending on the
   first parameter, the output can be directed to a file (indicated by a string
   or a path-like object), or to a `IO[bytes]`-like or `IO[str]`-like object.
 - The comments are outputed above each setting, wrapped to the specified width,
   providing essential help for users.
 - Check the [method
-  documentation](/reference/alpenstock/settings/#alpenstock.settings.Settings.to_yaml)
+  documentation](/alpenstock/reference/alpenstock/settings/#alpenstock.settings.Settings.to_yaml)
   for more options.
 
 
@@ -131,8 +131,9 @@ print(settings.passwd)  # Output: s3cr3t_p@ssw0rd
 ```
 
 **Key points:**
+
 - The
-  [`from_yaml`](/reference/alpenstock/settings/#alpenstock.settings.Settings.from_yaml)
+  [`from_yaml`](/alpenstock/reference/alpenstock/settings/#alpenstock.settings.Settings.from_yaml)
   method is used to load settings from a YAML file.
 - By setting the `replace_env_vars` parameter to `True`, any environment
   variable placeholders in the YAML file (formatted as `${VAR_NAME}`) will be
@@ -145,7 +146,7 @@ Assume the user has modified the generated YAML file to suit his/her needs,
 adding comments along the way. For example:
 
 ```yaml
-email: user@example.com  # Email are important so be moved to the top
+email: user@example.com  # Email is important so is moved to the top
 
 db: postgresql://user@localhost/dbname  # Use PostgreSQL for better performance
 
@@ -172,7 +173,7 @@ settings.to_yaml(sys.stdout)
 The output YAML file will be:
 
 ```yaml
-email: user@example.com  # Email are important so be moved to the top
+email: user@example.com  # Email is important so is moved to the top
 
 db: postgresql://user@localhost/dbname  # Use PostgreSQL for better performance
 
@@ -191,7 +192,7 @@ You can see that:
 
 ## Known Limitations
 
-**Environment variable placeholder is missing in output**
+**Environment variable placeholders are missing in output**
 
 Dumping after environment variable replacement will not preserve the placeholders in the output YAML file. Instead, the actual values from the environment will be written. 
 
@@ -216,13 +217,13 @@ class with a single `value: str` field, and then use `List[StringItem]`.
 
 ## Implementation Details
 
-The `alpenstock.settings` module leverages the `ruamel.yaml` library for YAML
+The `alpenstock.settings` module leverages the [`ruamel.yaml`](https://pypi.org/project/ruamel.yaml/) library for YAML
 parsing and serialization. This library supports comment preservation and key
 order maintenance, which are essential for the features provided by this module.
 
 When loading a YAML file, the module reads the content into a `CommentedMap`,
 which retains comments and key order. The settings model is then populated from
-this map, and stores the original `CommentedMap` as an private `_yaml` attribute
+this map, and stores the original `CommentedMap` as a private `_yaml` attribute
 for later use.
 
 When saving settings back to a YAML file, the module updates the stored `_yaml`
