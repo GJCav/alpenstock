@@ -7,8 +7,9 @@ Alpenstock is a collection of handy Python utilities designed to help me tackle 
 
 ## Highlights
 
-**Settings Management** ([Guide](/alpenstock/guides/settings/)):
+**Settings Management**:
 
 - Type-safe, fully-validated settings management using [Pydantic](https://docs.pydantic.dev/latest/).
 - YAML support & automatic environment variable overrides.
 - Comments and key orders preserved when saving settings back to file.
+- For more details, see this [guide](https://gjcav.github.io/alpenstock/guides/settings/).
