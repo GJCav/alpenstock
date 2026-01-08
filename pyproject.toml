@@ -2,7 +2,7 @@
 authors = [{name = "jcav", email = "micojcav@outlook.com"}]
 name = "alpenstock"
 requires-python = ">= 3.11"
-version = "1.2.0"
+version = "1.2.1"
 readme = "README.md"
 description = "A collection of handy Python utilities designed to help developers tackle the challenges of Python programming."
 

@@ -18,8 +18,8 @@ class Settings(BaseModel):
     
     # Internal attributes for preserving the YAML with comments
     _yaml: CommentedMap = PrivateAttr(default_factory=lambda: CommentedMap())
-    # Internal attribute to track fields replaced from environment variables
-    _env_replaced_fields: set[str] = PrivateAttr(default_factory=set)
+    # # Internal attribute to track fields replaced from environment variables
+    # _env_replaced_fields: set[str] = PrivateAttr(default_factory=set)
 
     @classmethod
     def from_yaml(
