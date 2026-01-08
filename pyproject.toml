@@ -4,6 +4,7 @@ name = "alpenstock"
 requires-python = ">= 3.11"
 version = "1.2.0"
 readme = "README.md"
+description = "A collection of handy Python utilities designed to help developers tackle the challenges of Python programming."
 
 dependencies = [
     "loguru>=0.7.0",
@@ -13,6 +14,11 @@ dependencies = [
     "wadler-lindig",
     "ruamel-yaml>=0.18",
 ]
+
+[project.urls]
+Homepage = "https://github.com/gjcav/alpenstock/"
+Documentation = "https://gjcav.github.io/alpenstock/"
+Repository = "https://github.com/gjcav/alpenstock/"
 
 [project.optional-dependencies]
 dev = [
