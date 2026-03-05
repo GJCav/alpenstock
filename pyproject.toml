@@ -27,6 +27,7 @@ dev = [
     "numpy",
     "torch", 
     "pytest",
+    "pyright==1.1.350",
     "mkdocs-material",
     "mkdocstrings[python]",
     "mkdocs-jupyter",

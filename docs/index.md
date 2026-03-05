@@ -13,3 +13,9 @@ Alpenstock is a collection of handy Python utilities designed to help me tackle 
 - YAML support & automatic environment variable overrides.
 - Comments and key orders preserved when saving settings back to file.
 - For more details, see this [guide](https://gjcav.github.io/alpenstock/guides/settings/).
+
+**Decorator-Only Pipeline**:
+
+- Lightweight stage-based pipeline with cache and resume semantics.
+- Multiple `Spec/Input/State/Output` fields are supported.
+- For usage and constraints, see this [guide](https://gjcav.github.io/alpenstock/guides/pipeline/).
