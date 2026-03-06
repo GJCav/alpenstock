@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import ast
+from dataclasses import dataclass
 import pickle
 from pathlib import Path
 
 import pytest
 
 from alpenstock.pipeline import input, output, spec, state, transient, define_pipeline, stage_func
+import alpenstock.pipeline._state_io as state_io
 
 
 @define_pipeline(save_path_field="save_to", kw_only=True)
@@ -386,3 +388,144 @@ def test_runtime_state_is_isolated_per_instance_even_without_weakref_slot(tmp_pa
     p1.step()
     p2.step()
     assert (tmp_path / "cache" / "step.pkl").exists()
+
+
+@define_pipeline(save_path_field="save_to", kw_only=True)
+class MultiFieldPipeline:
+    spec_a: int = spec()
+    spec_b: dict[str, int] = spec()
+
+    x: int = input()
+    y: int = input()
+
+    acc: int = state(default=0)
+    calls: int = state(default=0)
+    result: int = output(default=0)
+
+    save_to: str | Path | None = transient(default=None)
+
+    def run(self) -> None:
+        self.compute()
+
+    @stage_func(id="compute", order=0)
+    def compute(self) -> None:
+        self.calls += 1
+        self.acc = self.x + self.y + self.spec_a + self.spec_b["k"]
+        self.result = self.acc * 2
+
+
+def test_multifield_spec_and_stage_cache(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+
+    p1 = MultiFieldPipeline(spec_a=1, spec_b={"k": 2}, x=10, y=3, save_to=cache)
+    p1.run()
+    assert p1.calls == 1
+    assert p1.result == 32
+
+    p2 = MultiFieldPipeline(spec_a=1, spec_b={"k": 2}, x=100, y=200, save_to=cache)
+    p2.run()
+
+    assert p2.calls == 1
+    assert p2.acc == 16
+    assert p2.result == 32
+    assert p2.x == 100
+    assert p2.y == 200
+
+
+def test_multifield_spec_mismatch_raises(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+
+    p1 = MultiFieldPipeline(spec_a=1, spec_b={"k": 2}, x=1, y=2, save_to=cache)
+    p1.run()
+
+    p2 = MultiFieldPipeline(spec_a=1, spec_b={"k": 999}, x=1, y=2, save_to=cache)
+    with pytest.raises(ValueError, match="Spec mismatch"):
+        p2.run()
+
+
+def test_spec_file_uses_block_style_for_nested_mapping(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+    p = MultiFieldPipeline(spec_a=1, spec_b={"k": 2}, x=10, y=3, save_to=cache)
+    p.run()
+
+    text = (cache / "spec.yaml").read_text(encoding="utf-8")
+    assert "spec_b:\n" in text
+    assert "spec_b: {k: 2}" not in text
+    assert "k: 2" in text
+
+
+def test_multifield_field_schema_mismatch_raises(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+
+    p1 = MultiFieldPipeline(spec_a=1, spec_b={"k": 2}, x=1, y=2, save_to=cache)
+    p1.run()
+
+    @define_pipeline(save_path_field="save_to", kw_only=True)
+    class SchemaChangedPipeline:
+        spec_a: int = spec()
+        spec_b: dict[str, int] = spec()
+
+        x: int = input()
+        y: int = input()
+
+        acc: int = input(default=0)
+        calls: int = state(default=0)
+        result: int = output(default=0)
+
+        save_to: str | Path | None = transient(default=None)
+
+        def run(self) -> None:
+            self.compute()
+
+        @stage_func(id="compute", order=0)
+        def compute(self) -> None:
+            self.calls += 1
+
+    p2 = SchemaChangedPipeline(spec_a=1, spec_b={"k": 2}, x=1, y=2, save_to=cache)
+    with pytest.raises(ValueError, match="Field schema mismatch"):
+        p2.run()
+
+
+def test_atomic_write_failure_keeps_target(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "target.txt"
+    path.write_text("old", encoding="utf-8")
+
+    def boom(src, dst):
+        raise RuntimeError("replace failed")
+
+    monkeypatch.setattr(state_io.os, "replace", boom)
+
+    with pytest.raises(RuntimeError, match="replace failed"):
+        state_io.atomic_write_text(path, "new")
+
+    assert path.read_text(encoding="utf-8") == "old"
+
+
+def test_spec_supports_dataclass(tmp_path: Path) -> None:
+    @dataclass
+    class ExtraSpec:
+        alpha: int
+        beta: list[int]
+
+    @define_pipeline(save_path_field="save_to", kw_only=True)
+    class DataclassSpecPipeline:
+        main_spec: ExtraSpec = spec()
+        x: int = input()
+        v: int = state(default=0)
+        save_to: str | Path | None = transient(default=None)
+
+        def run(self) -> None:
+            self.work()
+
+        @stage_func(id="work", order=0)
+        def work(self) -> None:
+            self.v = self.main_spec.alpha + sum(self.main_spec.beta) + self.x
+
+    cache = tmp_path / "cache"
+    p1 = DataclassSpecPipeline(main_spec=ExtraSpec(alpha=1, beta=[2, 3]), x=5, save_to=cache)
+    p1.run()
+    assert p1.v == 11
+
+    p2 = DataclassSpecPipeline(main_spec=ExtraSpec(alpha=1, beta=[2, 3]), x=100, save_to=cache)
+    p2.run()
+    assert p2.v == 11

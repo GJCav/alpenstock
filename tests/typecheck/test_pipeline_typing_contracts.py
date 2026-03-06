@@ -100,9 +100,9 @@ def _run_pyright(case_file: str) -> PyrightResult:
 @pytest.mark.parametrize(
     "case_file",
     [
-        "pass_import_and_ctor.py",
-        "pass_field_helper_args.py",
-        "pass_kw_only_required_after_defaults.py",
+        "positive/import_ctor_ok.py",
+        "positive/field_helper_args_ok.py",
+        "positive/kwonly_required_after_defaults_ok.py",
     ],
 )
 def test_pyright_positive_cases(case_file: str) -> None:
@@ -116,13 +116,13 @@ def test_pyright_positive_cases(case_file: str) -> None:
 @pytest.mark.parametrize(
     ("case_file", "expected_rule", "fallback_substring"),
     [
-        ("fail_unknown_ctor_arg.py", "reportCallIssue", "No parameter named"),
-        ("fail_helper_hash_type.py", "reportArgumentType", "cannot be assigned"),
-        ("fail_call_stage_with_arg.py", "reportCallIssue", "Expected 0 positional arguments"),
-        ("fail_spec_on_setattr.py", "reportCallIssue", "No parameter named"),
-        ("fail_stage_missing_order.py", "reportCallIssue", "Argument missing for parameter"),
+        ("negative/ctor_unknown_arg_err.py", "reportCallIssue", "No parameter named"),
+        ("negative/field_helper_hash_type_err.py", "reportArgumentType", "cannot be assigned"),
+        ("negative/stage_call_with_arg_err.py", "reportCallIssue", "Expected 0 positional arguments"),
+        ("negative/spec_on_setattr_err.py", "reportCallIssue", "No parameter named"),
+        ("negative/stage_missing_order_err.py", "reportCallIssue", "Argument missing for parameter"),
         (
-            "fail_kw_only_false_required_after_defaults.py",
+            "negative/kwonly_false_required_after_defaults_err.py",
             "reportGeneralTypeIssues",
             "Fields without default values cannot appear after fields with default values",
         ),

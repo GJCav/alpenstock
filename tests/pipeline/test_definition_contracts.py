@@ -192,3 +192,86 @@ def test_stage_order_rejects_non_int_values(bad_order: object) -> None:
             @stage_func(id="step", order=bad_order)  # type: ignore[arg-type]
             def step(self) -> None:
                 return None
+
+
+def test_save_path_field_must_exist() -> None:
+    with pytest.raises(ValueError, match="save_path_field"):
+
+        @define_pipeline(save_path_field="missing", kw_only=True)
+        class InvalidPipeline:
+            spec_a: int = spec()
+            save_to: str | Path | None = transient(default=None)
+
+
+def test_save_path_field_type_validation() -> None:
+    with pytest.raises(TypeError, match=r"str \| Path \| None"):
+
+        @define_pipeline(save_path_field="save_to", kw_only=True)
+        class InvalidPipeline:
+            spec_a: int = spec()
+            save_to: int = transient(default=0)
+
+
+def test_save_path_field_kind_validation() -> None:
+    with pytest.raises(ValueError, match="must be marked as transient"):
+
+        @define_pipeline(save_path_field="save_to", kw_only=True)
+        class InvalidPipeline:
+            spec_a: int = spec()
+            save_to: str | Path | None = state(default=None)
+
+
+def test_stage_return_none_contract(tmp_path: Path) -> None:
+    @define_pipeline(save_path_field="save_to", kw_only=True)
+    class InvalidStageReturn:
+        spec_a: int = spec()
+        x: int = input()
+        v: int = state(default=0)
+        save_to: str | Path | None = transient(default=None)
+
+        def run(self) -> None:
+            self.bad_stage()
+
+        @stage_func(id="bad", order=0)
+        def bad_stage(self) -> None:
+            self.v = self.x
+            return 1  # type: ignore[return-value]
+
+    p = InvalidStageReturn(spec_a=1, x=2, save_to=tmp_path / "cache")
+    with pytest.raises(TypeError, match="must return None"):
+        p.run()
+
+
+def test_stage_signature_validation() -> None:
+    with pytest.raises(TypeError, match="must accept no arguments"):
+
+        @define_pipeline(save_path_field="save_to", kw_only=True)
+        class InvalidStageSignature:
+            spec_a: int = spec()
+            save_to: str | Path | None = transient(default=None)
+
+            @stage_func(id="bad", order=0)
+            def bad(self, x: int) -> None:
+                return None
+
+
+def test_spec_rejects_on_setattr_override() -> None:
+    with pytest.raises(ValueError, match="does not allow overriding on_setattr"):
+        spec(on_setattr=None)  # type: ignore[arg-type]
+
+
+def test_define_pipeline_kw_only_allows_required_field_after_defaults(tmp_path: Path) -> None:
+    @define_pipeline(save_path_field="save_path", kw_only=True)
+    class KwOnlyPipeline:
+        order: int = spec(default=2)
+        x: float = input(default=0.0)
+        y: float | None = output(default=None)
+        save_path: str = transient()
+
+        @stage_func(id="step", order=0)
+        def step(self) -> None:
+            self.y = self.x + self.order
+
+    p = KwOnlyPipeline(save_path=str(tmp_path / "cache"))
+    p.step()
+    assert p.y == 2.0
