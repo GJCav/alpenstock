@@ -22,6 +22,21 @@ class PyrightResult:
     messages: list[str]
 
 
+def _load_pyright_json(stdout: str) -> dict[str, object]:
+    # pyright may print nodeenv bootstrap logs to stdout on first run.
+    # Keep parsing from each "{" and accept the first valid JSON payload.
+    for index, char in enumerate(stdout):
+        if char != "{":
+            continue
+        try:
+            payload = json.loads(stdout[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            return payload
+    raise json.JSONDecodeError("No JSON object found in stdout", stdout, 0)
+
+
 
 def _run_pyright(case_file: str) -> PyrightResult:
     pyright_bin = shutil.which("pyright")
@@ -45,7 +60,7 @@ def _run_pyright(case_file: str) -> PyrightResult:
 
     payload: dict[str, object]
     try:
-        payload = json.loads(proc.stdout)
+        payload = _load_pyright_json(proc.stdout)
     except json.JSONDecodeError as exc:
         raise AssertionError(
             "Failed to parse pyright JSON output. "
