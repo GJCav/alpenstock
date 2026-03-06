@@ -330,17 +330,20 @@ def _write_spec_file(path: Path, payload: dict[str, Any]) -> None:
 
 
 
-def _resolve_custom_hook(self: Any, hook_name: str) -> Callable[..., Any] | None:
-    cls = type(self)
-    candidate_names: list[str] = [hook_name]
-    for owner in cls.__mro__:
+def _iter_hook_candidate_names(cls: type, hook_name: str):
+    yield hook_name
+    for owner in inspect.getmro(cls):
         if owner is object:
             continue
+        # Try Python name-mangled private method names across the class hierarchy.
         owner_name = owner.__name__.lstrip("_")
-        candidate_names.append(f"_{owner_name}{hook_name}")
+        yield f"_{owner_name}{hook_name}"
 
+
+def _resolve_custom_hook(self: Any, hook_name: str) -> Callable[..., Any] | None:
+    cls = type(self)
     seen: set[str] = set()
-    for attr_name in candidate_names:
+    for attr_name in _iter_hook_candidate_names(cls, hook_name):
         if attr_name in seen:
             continue
         seen.add(attr_name)
