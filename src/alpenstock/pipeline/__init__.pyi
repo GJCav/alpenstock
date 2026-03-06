@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Callable, TypeVar, dataclass_transform, overload
 
 import attrs
@@ -32,9 +33,29 @@ def define_pipeline(
 _F = TypeVar("_F", bound=Callable[..., None])
 def stage_func(*, id: str, order: int) -> Callable[[_F], _F]: ...
 
+def get_state_dict(
+    ins: Any,
+    *,
+    spec: bool = False,
+    input: bool = False,
+    state: bool = True,
+    transient: bool = False,
+    output: bool = True,
+    include_finished_markers: bool = False,
+) -> dict[str, Any]: ...
+
+def load_spec(
+    cls: type[Any],
+    save_to: str | Path,
+    *,
+    include_field_schema: bool = False,
+) -> dict[str, Any] | None: ...
+
 __all__ = [
     "define_pipeline",
     "stage_func",
+    "get_state_dict",
+    "load_spec",
     "spec",
     "state",
     "output",

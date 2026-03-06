@@ -116,6 +116,55 @@ Writes use atomic replace semantics.
 - Hook lookup supports Python name mangling, so `def __saver(...)` and `def __loader(...)` work as expected.
 - Custom loader must return a `dict`.
 
+## Helper Functions
+
+The module also exposes two global helper functions:
+
+- `get_state_dict(ins, *, spec=False, input=False, state=True, transient=False, output=True, include_finished_markers=False)`
+- `load_spec(cls, save_to, *, include_field_schema=False)`
+
+`get_state_dict` returns grouped runtime data by kind. Example:
+
+```python
+from pathlib import Path
+from alpenstock.pipeline import get_state_dict, load_spec
+
+p = ToyPipeline(
+    spec_lr=0.1,
+    spec_steps=10,
+    x=1.0,
+    y=2.0,
+    save_to=Path("./cache"),
+)
+p.run()
+
+snapshot = get_state_dict(
+    p,
+    spec=True,
+    input=True,
+    state=True,
+    output=True,
+    include_finished_markers=True,
+)
+# {
+#   "spec": {...}, "input": {...}, "state": {...}, "output": {...},
+#   "finished_markers": {"init": True, "train": True}
+# }
+```
+
+When `include_finished_markers=True`, markers come from the current instance runtime memory only.
+The function does not bootstrap or read cache files from disk.
+
+`load_spec` reads `<save_to>/spec.yaml` for a pipeline class:
+
+```python
+spec_fields = load_spec(ToyPipeline, Path("./cache"))
+full_spec = load_spec(ToyPipeline, Path("./cache"), include_field_schema=True)
+```
+
+If `spec.yaml` does not exist, `load_spec` returns `None`.
+If `spec.yaml` exists, `load_spec` validates cached `field_schema` against the provided pipeline class.
+
 ## Notes and Limitations
 
 - Cache key is effectively `save_to + stage_id`.

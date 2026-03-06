@@ -141,6 +141,93 @@ def stage_func(*, id: str, order: int):
 
 
 
+def get_state_dict(
+    ins: Any,
+    *,
+    spec: bool = False,
+    input: bool = False,
+    state: bool = True,
+    transient: bool = False,
+    output: bool = True,
+    include_finished_markers: bool = False,
+) -> dict[str, Any]:
+    meta = _require_meta(type(ins))
+    result: dict[str, Any] = {}
+
+    if spec:
+        payload: dict[str, Any] = {}
+        for name in meta.fields_by_kind["spec"]:
+            payload[name] = normalize_spec_value(getattr(ins, name), path=f"spec.{name}")
+        result["spec"] = payload
+
+    if input:
+        result["input"] = {
+            name: getattr(ins, name)
+            for name in meta.fields_by_kind["input"]
+        }
+
+    if state:
+        result["state"] = {
+            name: getattr(ins, name)
+            for name in meta.fields_by_kind["state"]
+        }
+
+    if transient:
+        result["transient"] = {
+            name: getattr(ins, name)
+            for name in meta.fields_by_kind["transient"]
+        }
+
+    if output:
+        result["output"] = {
+            name: getattr(ins, name)
+            for name in meta.fields_by_kind["output"]
+        }
+
+    if include_finished_markers:
+        runtime = _get_runtime_state(ins)
+        _validate_finished_stage_markers(meta=meta, finished=runtime.finished_stages)
+        markers: dict[str, bool] = {}
+        for stage_id in meta.stage_sequence:
+            if stage_id in runtime.finished_stages:
+                markers[stage_id] = True
+        result["finished_markers"] = markers
+
+    return result
+
+
+def load_spec(
+    cls: type[Any],
+    save_to: str | Path,
+    *,
+    include_field_schema: bool = False,
+) -> dict[str, Any] | None:
+    if not isinstance(cls, type):
+        raise TypeError(f"load_spec expects a class type, got {type(cls)!r}")
+    meta = _require_meta(cls)
+
+    spec_file = Path(save_to) / SPEC_FILE_NAME
+    if not spec_file.exists():
+        return None
+
+    payload = load_spec_file(spec_file)
+    file_schema = payload.get("field_schema")
+    if not isinstance(file_schema, dict):
+        raise ValueError(f"Invalid spec file content in {spec_file}: missing field_schema mapping")
+    if file_schema != meta.field_schema:
+        raise ValueError(
+            "Field schema mismatch: current fields/kinds differ from cached spec.yaml"
+        )
+
+    if include_field_schema:
+        return payload
+
+    spec_fields = payload.get("spec_fields")
+    if not isinstance(spec_fields, dict):
+        raise ValueError(f"Invalid spec file content in {spec_file}: missing spec_fields mapping")
+    return spec_fields
+
+
 def _run_stage(self: Any, *, stage_id: str, stage_order: int, fn: Callable[[Any], Any]) -> None:
     meta = _require_meta(type(self))
     runtime = _get_runtime_state(self)
