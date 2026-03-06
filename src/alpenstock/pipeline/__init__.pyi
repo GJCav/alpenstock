@@ -1,15 +1,17 @@
 from typing import Any, Callable, TypeVar, dataclass_transform, overload
 
-from ._fields import Input as Input
-from ._fields import Output as Output
-from ._fields import Spec as Spec
-from ._fields import State as State
-from ._fields import Transient as Transient
+import attrs
+
+from ._fields import input as input
+from ._fields import output as output
+from ._fields import spec as spec
+from ._fields import state as state
+from ._fields import transient as transient
 
 _C = TypeVar("_C", bound=type)
 
 @overload
-@dataclass_transform(field_specifiers=(Spec, State, Output, Input, Transient))
+@dataclass_transform(field_specifiers=(spec, state, output, input, transient, attrs.field))
 def define_pipeline(
     *,
     save_path_field: str,
@@ -18,7 +20,7 @@ def define_pipeline(
 ) -> Callable[[_C], _C]: ...
 
 @overload
-@dataclass_transform(field_specifiers=(Spec, State, Output, Input, Transient))
+@dataclass_transform(field_specifiers=(spec, state, output, input, transient, attrs.field))
 def define_pipeline(
     maybe_cls: _C,
     *,
@@ -33,9 +35,9 @@ def stage_func(*, id: str, order: int) -> Callable[[_F], _F]: ...
 __all__ = [
     "define_pipeline",
     "stage_func",
-    "Spec",
-    "State",
-    "Output",
-    "Input",
-    "Transient",
+    "spec",
+    "state",
+    "output",
+    "input",
+    "transient",
 ]

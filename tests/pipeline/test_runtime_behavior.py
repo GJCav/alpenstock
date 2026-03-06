@@ -6,22 +6,22 @@ from pathlib import Path
 
 import pytest
 
-from alpenstock.pipeline import Input, Output, Spec, State, Transient, define_pipeline, stage_func
+from alpenstock.pipeline import input, output, spec, state, transient, define_pipeline, stage_func
 
 
 @define_pipeline(save_path_field="save_to", kw_only=True)
 class TwoStagePipeline:
-    spec_scale: int = Spec()
+    spec_scale: int = spec()
 
-    x: int = Input()
-    y: int = Input()
+    x: int = input()
+    y: int = input()
 
-    stage1_value: int = State(default=0)
-    stage2_value: int = State(default=0)
-    final_output: int = Output(default=0)
+    stage1_value: int = state(default=0)
+    stage2_value: int = state(default=0)
+    final_output: int = output(default=0)
 
-    execution_log: list[str] = Transient(factory=list)
-    save_to: str | Path | None = Transient(default=None)
+    execution_log: list[str] = transient(factory=list)
+    save_to: str | Path | None = transient(default=None)
 
     def run(self) -> None:
         self.stage1()
@@ -168,12 +168,12 @@ def test_order_guard_applies_when_cache_is_disabled() -> None:
 def test_name_mangled_saver_loader_are_used(tmp_path: Path) -> None:
     @define_pipeline(save_path_field="save_to", kw_only=True)
     class MangledSerializerPipeline:
-        spec_bias: int = Spec()
-        x: int = Input()
-        value: int = State(default=0)
-        save_to: str | Path | None = Transient(default=None)
-        saver_calls: int = Transient(default=0)
-        loader_calls: int = Transient(default=0)
+        spec_bias: int = spec()
+        x: int = input()
+        value: int = state(default=0)
+        save_to: str | Path | None = transient(default=None)
+        saver_calls: int = transient(default=0)
+        loader_calls: int = transient(default=0)
 
         def run(self) -> None:
             self.step()
@@ -254,16 +254,16 @@ def test_field_schema_mismatch_raises(tmp_path: Path) -> None:
 
     @define_pipeline(save_path_field="save_to", kw_only=True)
     class SchemaChangedPipeline:
-        spec_scale: int = Spec()
+        spec_scale: int = spec()
 
-        x: int = Input()
-        y: int = Input()
+        x: int = input()
+        y: int = input()
 
-        stage1_value: int = Input(default=0)  # changed kind
-        stage2_value: int = State(default=0)
-        final_output: int = Output(default=0)
+        stage1_value: int = input(default=0)  # changed kind
+        stage2_value: int = state(default=0)
+        final_output: int = output(default=0)
 
-        save_to: str | Path | None = Transient(default=None)
+        save_to: str | Path | None = transient(default=None)
 
         def run(self) -> None:
             self.stage1()
@@ -280,13 +280,13 @@ def test_field_schema_mismatch_raises(tmp_path: Path) -> None:
 def test_stage_order_is_driven_by_order_not_definition_order(tmp_path: Path) -> None:
     @define_pipeline(save_path_field="save_to", kw_only=True)
     class ReorderedPipeline:
-        spec_scale: int = Spec()
-        x: int = Input()
-        y: int = Input()
-        stage1_value: int = State(default=0)
-        stage2_value: int = State(default=0)
-        execution_log: list[str] = Transient(factory=list)
-        save_to: str | Path | None = Transient(default=None)
+        spec_scale: int = spec()
+        x: int = input()
+        y: int = input()
+        stage1_value: int = state(default=0)
+        stage2_value: int = state(default=0)
+        execution_log: list[str] = transient(factory=list)
+        save_to: str | Path | None = transient(default=None)
 
         def run(self) -> None:
             self.stage1()
@@ -318,12 +318,12 @@ def test_stage_order_is_driven_by_order_not_definition_order(tmp_path: Path) -> 
 def test_inheritance_partial_cache_continuity_uses_order(tmp_path: Path) -> None:
     @define_pipeline(save_path_field="save_to", kw_only=True)
     class BasePipeline:
-        spec_scale: int = Spec()
-        x: int = Input()
-        y: int = Input()
-        stage1_value: int = State(default=0)
-        stage2_value: int = State(default=0)
-        save_to: str | Path | None = Transient(default=None)
+        spec_scale: int = spec()
+        x: int = input()
+        y: int = input()
+        stage1_value: int = state(default=0)
+        stage2_value: int = state(default=0)
+        save_to: str | Path | None = transient(default=None)
 
         def run(self) -> None:
             self.stage1()
@@ -339,8 +339,8 @@ def test_inheritance_partial_cache_continuity_uses_order(tmp_path: Path) -> None
 
     @define_pipeline(save_path_field="save_to", kw_only=True)
     class ChildPipeline(BasePipeline):
-        stage3_value: int = State(default=0)
-        execution_log: list[str] = Transient(factory=list)
+        stage3_value: int = state(default=0)
+        execution_log: list[str] = transient(factory=list)
 
         def run(self) -> None:
             self.stage1()
@@ -368,9 +368,9 @@ def test_inheritance_partial_cache_continuity_uses_order(tmp_path: Path) -> None
 def test_runtime_state_is_isolated_per_instance_even_without_weakref_slot(tmp_path: Path) -> None:
     @define_pipeline(save_path_field="save_to", kw_only=True, weakref_slot=False)
     class NoWeakrefPipeline:
-        spec_scale: int = Spec()
-        calls: int = State(default=0)
-        save_to: str | Path | None = Transient(default=None)
+        spec_scale: int = spec()
+        calls: int = state(default=0)
+        save_to: str | Path | None = transient(default=None)
 
         @stage_func(id="step", order=0)
         def step(self) -> None:

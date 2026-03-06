@@ -69,7 +69,7 @@ def build_pipeline_meta(cls: type, *, save_path_field: str) -> PipelineMeta:
 
     if field_schema[save_path_field] != "transient":
         raise ValueError(
-            f"save_path_field={save_path_field!r} must be marked as Transient(), "
+            f"save_path_field={save_path_field!r} must be marked as transient(), "
             f"but got kind={field_schema[save_path_field]!r}"
         )
 

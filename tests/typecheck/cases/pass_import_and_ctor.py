@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from alpenstock.pipeline import Input, Output, Spec, State, Transient, define_pipeline, stage_func
+from alpenstock.pipeline import input, output, spec, state, transient, define_pipeline, stage_func
 
 
 @define_pipeline(save_path_field="save_to", kw_only=True)
 class GoodPipeline:
-    spec_a: int = Spec()
-    x: int = Input()
-    calls: int = State(default=0)
-    out: int = Output(default=0)
-    save_to: str | Path | None = Transient(default=None)
+    spec_a: int = spec()
+    x: int = input()
+    calls: int = state(default=0)
+    out: int = output(default=0)
+    save_to: str | Path | None = transient(default=None)
 
     def run(self) -> None:
         self.step()

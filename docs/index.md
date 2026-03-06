@@ -17,5 +17,5 @@ Alpenstock is a collection of handy Python utilities designed to help me tackle 
 **Decorator-Only Pipeline**:
 
 - Lightweight stage-based pipeline with cache and resume semantics.
-- Multiple `Spec/Input/State/Output` fields are supported.
+- Multiple `spec/input/state/output` fields are supported.
 - For usage and constraints, see this [guide](https://gjcav.github.io/alpenstock/guides/pipeline/).

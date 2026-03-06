@@ -1,12 +1,12 @@
 from ._decorators import define_pipeline, stage_func
-from ._fields import Input, Output, Spec, State, Transient
+from ._fields import input, output, spec, state, transient
 
 __all__ = [
     "define_pipeline",
     "stage_func",
-    "Spec",
-    "State",
-    "Output",
-    "Input",
-    "Transient",
+    "spec",
+    "state",
+    "output",
+    "input",
+    "transient",
 ]

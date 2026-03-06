@@ -1,27 +1,28 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib
 from pathlib import Path
 
 import pytest
 
-from alpenstock.pipeline import Input, Output, Spec, State, Transient, define_pipeline, stage_func
+from alpenstock.pipeline import input, output, spec, state, transient, define_pipeline, stage_func
 import alpenstock.pipeline._state_io as state_io
 
 
 @define_pipeline(save_path_field="save_to", kw_only=True)
 class MultiFieldPipeline:
-    spec_a: int = Spec()
-    spec_b: dict[str, int] = Spec()
+    spec_a: int = spec()
+    spec_b: dict[str, int] = spec()
 
-    x: int = Input()
-    y: int = Input()
+    x: int = input()
+    y: int = input()
 
-    acc: int = State(default=0)
-    calls: int = State(default=0)
-    result: int = Output(default=0)
+    acc: int = state(default=0)
+    calls: int = state(default=0)
+    result: int = output(default=0)
 
-    save_to: str | Path | None = Transient(default=None)
+    save_to: str | Path | None = transient(default=None)
 
     def run(self) -> None:
         self.compute()
@@ -81,17 +82,17 @@ def test_field_schema_mismatch_raises(tmp_path: Path) -> None:
 
     @define_pipeline(save_path_field="save_to", kw_only=True)
     class SchemaChangedPipeline:
-        spec_a: int = Spec()
-        spec_b: dict[str, int] = Spec()
+        spec_a: int = spec()
+        spec_b: dict[str, int] = spec()
 
-        x: int = Input()
-        y: int = Input()
+        x: int = input()
+        y: int = input()
 
-        acc: int = Input(default=0)  # changed kind
-        calls: int = State(default=0)
-        result: int = Output(default=0)
+        acc: int = input(default=0)  # changed kind
+        calls: int = state(default=0)
+        result: int = output(default=0)
 
-        save_to: str | Path | None = Transient(default=None)
+        save_to: str | Path | None = transient(default=None)
 
         def run(self) -> None:
             self.compute()
@@ -110,8 +111,8 @@ def test_save_path_field_must_exist() -> None:
 
         @define_pipeline(save_path_field="missing", kw_only=True)
         class InvalidPipeline:
-            spec_a: int = Spec()
-            save_to: str | Path | None = Transient(default=None)
+            spec_a: int = spec()
+            save_to: str | Path | None = transient(default=None)
 
 
 
@@ -120,26 +121,26 @@ def test_save_path_field_type_validation() -> None:
 
         @define_pipeline(save_path_field="save_to", kw_only=True)
         class InvalidPipeline:
-            spec_a: int = Spec()
-            save_to: int = Transient(default=0)
+            spec_a: int = spec()
+            save_to: int = transient(default=0)
 
 
 def test_save_path_field_kind_validation() -> None:
-    with pytest.raises(ValueError, match="must be marked as Transient"):
+    with pytest.raises(ValueError, match="must be marked as transient"):
 
         @define_pipeline(save_path_field="save_to", kw_only=True)
         class InvalidPipeline:
-            spec_a: int = Spec()
-            save_to: str | Path | None = State(default=None)
+            spec_a: int = spec()
+            save_to: str | Path | None = state(default=None)
 
 
 def test_stage_return_none_contract(tmp_path: Path) -> None:
     @define_pipeline(save_path_field="save_to", kw_only=True)
     class InvalidStageReturn:
-        spec_a: int = Spec()
-        x: int = Input()
-        v: int = State(default=0)
-        save_to: str | Path | None = Transient(default=None)
+        spec_a: int = spec()
+        x: int = input()
+        v: int = state(default=0)
+        save_to: str | Path | None = transient(default=None)
 
         def run(self) -> None:
             self.bad_stage()
@@ -159,8 +160,8 @@ def test_stage_signature_validation() -> None:
 
         @define_pipeline(save_path_field="save_to", kw_only=True)
         class InvalidStageSignature:
-            spec_a: int = Spec()
-            save_to: str | Path | None = Transient(default=None)
+            spec_a: int = spec()
+            save_to: str | Path | None = transient(default=None)
 
             @stage_func(id="bad", order=0)
             def bad(self, x: int) -> None:
@@ -190,10 +191,10 @@ def test_spec_supports_dataclass(tmp_path: Path) -> None:
 
     @define_pipeline(save_path_field="save_to", kw_only=True)
     class DataclassSpecPipeline:
-        main_spec: ExtraSpec = Spec()
-        x: int = Input()
-        v: int = State(default=0)
-        save_to: str | Path | None = Transient(default=None)
+        main_spec: ExtraSpec = spec()
+        x: int = input()
+        v: int = state(default=0)
+        save_to: str | Path | None = transient(default=None)
 
         def run(self) -> None:
             self.work()
@@ -217,21 +218,33 @@ def test_define_pipeline_exposes_dataclass_transform() -> None:
     assert isinstance(transform_meta, dict)
     specifiers = transform_meta.get("field_specifiers", ())
     names = {getattr(item, "__name__", "") for item in specifiers}
-    assert {"Spec", "State", "Output", "Input", "Transient"}.issubset(names)
+    assert {"spec", "state", "output", "input", "transient", "field"}.issubset(names)
+
+
+def test_pipeline_exports_lowercase_helpers_only() -> None:
+    pipeline_module = importlib.import_module("alpenstock.pipeline")
+    assert {"spec", "state", "output", "input", "transient"}.issubset(set(dir(pipeline_module)))
+    assert not {"Spec", "State", "Output", "Input", "Transient"} & set(dir(pipeline_module))
+
+
+@pytest.mark.parametrize("name", ["Spec", "State", "Output", "Input", "Transient"])
+def test_uppercase_helpers_are_not_importable(name: str) -> None:
+    with pytest.raises(ImportError):
+        exec(f"from alpenstock.pipeline import {name}", {})
 
 
 def test_spec_rejects_on_setattr_override() -> None:
     with pytest.raises(ValueError, match="does not allow overriding on_setattr"):
-        Spec(on_setattr=None)
+        spec(on_setattr=None)
 
 
 def test_define_pipeline_kw_only_allows_required_field_after_defaults(tmp_path: Path) -> None:
     @define_pipeline(save_path_field="save_path", kw_only=True)
     class KwOnlyPipeline:
-        order: int = Spec(default=2)
-        x: float = Input(default=0.0)
-        y: float | None = Output(default=None)
-        save_path: str = Transient()
+        order: int = spec(default=2)
+        x: float = input(default=0.0)
+        y: float | None = output(default=None)
+        save_path: str = transient()
 
         @stage_func(id="step", order=0)
         def step(self) -> None:

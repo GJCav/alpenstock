@@ -39,30 +39,30 @@ def _expose_attrs_field_api(fn: Any) -> Any:
 
 
 @_expose_attrs_field_api
-def Spec(**kwargs: Any) -> Any:
+def spec(**kwargs: Any) -> Any:
     if "on_setattr" in kwargs:
         raise ValueError(
-            "Spec() does not allow overriding on_setattr; spec fields are always frozen"
+            "spec() does not allow overriding on_setattr; spec fields are always frozen"
         )
     kwargs["on_setattr"] = attrs.setters.frozen
     return _pipeline_field("spec", **kwargs)
 
 
 @_expose_attrs_field_api
-def State(**kwargs: Any) -> Any:
+def state(**kwargs: Any) -> Any:
     return _pipeline_field("state", **kwargs)
 
 
 @_expose_attrs_field_api
-def Output(**kwargs: Any) -> Any:
+def output(**kwargs: Any) -> Any:
     return _pipeline_field("output", **kwargs)
 
 
 @_expose_attrs_field_api
-def Input(**kwargs: Any) -> Any:
+def input(**kwargs: Any) -> Any:
     return _pipeline_field("input", **kwargs)
 
 
 @_expose_attrs_field_api
-def Transient(**kwargs: Any) -> Any:
+def transient(**kwargs: Any) -> Any:
     return _pipeline_field("transient", **kwargs)

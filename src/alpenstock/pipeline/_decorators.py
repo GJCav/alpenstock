@@ -10,7 +10,7 @@ import re
 import attrs
 from ruamel.yaml import YAML
 
-from ._fields import Input, Output, Spec, State, Transient
+from ._fields import input, output, spec, state, transient
 from ._meta import (
     PIPELINE_INTERNAL_FIELD_METADATA_KEY,
     STAGE_FN_ATTR,
@@ -45,7 +45,7 @@ _C = TypeVar("_C", bound=type)
 
 
 @overload
-@dataclass_transform(field_specifiers=(Spec, State, Output, Input, Transient))
+@dataclass_transform(field_specifiers=(spec, state, output, input, transient, attrs.field))
 def define_pipeline(
     maybe_cls: _C,
     *,
@@ -57,7 +57,7 @@ def define_pipeline(
 
 
 @overload
-@dataclass_transform(field_specifiers=(Spec, State, Output, Input, Transient))
+@dataclass_transform(field_specifiers=(spec, state, output, input, transient, attrs.field))
 def define_pipeline(
     maybe_cls: None = ...,
     *,
@@ -68,7 +68,7 @@ def define_pipeline(
     ...
 
 
-@dataclass_transform(field_specifiers=(Spec, State, Output, Input, Transient))
+@dataclass_transform(field_specifiers=(spec, state, output, input, transient, attrs.field))
 def define_pipeline(
     maybe_cls: _C | None = None,
     *,
@@ -128,7 +128,7 @@ def stage_func(*, id: str, order: int):
         def wrapped(self: Any, *args: Any, **kwargs: Any) -> None:
             if args or kwargs:
                 raise TypeError(
-                    f"Stage {id!r} does not accept arguments; pass data through Input/State/Output fields"
+                    f"Stage {id!r} does not accept arguments; pass data through input/state/output fields"
                 )
             return _run_stage(self, stage_id=id, stage_order=order, fn=fn)
 

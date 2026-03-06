@@ -14,17 +14,17 @@ This guide introduces Alpenstock's lightweight pipeline utility for stage-based 
 
 Use the helper fields to declare semantics:
 
-- `Spec()`
-- `Input()`
-- `State()`
-- `Output()`
-- `Transient()`
+- `spec()`
+- `input()`
+- `state()`
+- `output()`
+- `transient()`
 
-All kinds can appear multiple times, including `Spec`.
+All kinds can appear multiple times, including `spec`.
 
-Unmarked fields are treated as `Transient`.
+Unmarked fields are treated as `transient`.
 
-`Spec()` fields are frozen after construction, and `on_setattr` cannot be overridden.
+`spec()` fields are frozen after construction, and `on_setattr` cannot be overridden.
 
 ## Minimal Example
 
@@ -33,25 +33,25 @@ from pathlib import Path
 from alpenstock.pipeline import (
     define_pipeline,
     stage_func,
-    Spec,
-    Input,
-    State,
-    Output,
-    Transient,
+    spec,
+    input,
+    state,
+    output,
+    transient,
 )
 
 @define_pipeline(save_path_field="save_to", kw_only=True)
 class ToyPipeline:
-    spec_lr: float = Spec()
-    spec_steps: int = Spec(default=10)
+    spec_lr: float = spec()
+    spec_steps: int = spec(default=10)
 
-    x: float = Input()
-    y: float = Input()
+    x: float = input()
+    y: float = input()
 
-    w: float = State(default=0.0)
-    loss: float = Output(default=0.0)
+    w: float = state(default=0.0)
+    loss: float = output(default=0.0)
 
-    save_to: str | Path | None = Transient(default=None)
+    save_to: str | Path | None = transient(default=None)
 
     def run(self) -> None:
         self.init_stage()
@@ -79,12 +79,12 @@ class ToyPipeline:
 - Each completed stage writes `<stage_id>.pkl`.
 - On stage cache hit:
   - stage body is skipped when its finished marker exists
-  - `State` and `Output` are restored from snapshot
-  - `Input` and `Transient` keep current instance values
+  - `state` and `output` are restored from snapshot
+  - `input` and `transient` keep current instance values
 
 ## Validation Rules
 
-- `save_path_field` must point to a `Transient` field.
+- `save_path_field` must point to a `transient` field.
 - `save_path_field` annotation must be compatible with `str | Path` (optionally `None`).
 - Stage IDs must be unique in one class.
 - Stage IDs must match `^[A-Za-z0-9_]+$`.
@@ -99,12 +99,12 @@ class ToyPipeline:
 
 `spec.yaml` stores:
 
-- `spec_fields`: normalized values of all `Spec` fields
+- `spec_fields`: normalized values of all `spec` fields
 - `field_schema`: all fields with kind labels
 
 Each stage snapshot stores:
 
-- full `State + Output`
+- full `state + output`
 - stage completion markers `__stage_finished_<id>`
 
 Writes use atomic replace semantics.
@@ -123,4 +123,4 @@ Writes use atomic replace semantics.
 - Different pipelines should not share the same `save_to` directory.
 - No concurrency guarantees are provided for sharing one cache path across processes.
 - The framework rejects direct calls to non-next stages; users must call stages in strict `order`.
-- `Spec` freezing does not prevent in-place mutation of nested mutable objects (for example, `dict`/`list`).
+- `spec` freezing does not prevent in-place mutation of nested mutable objects (for example, `dict`/`list`).
