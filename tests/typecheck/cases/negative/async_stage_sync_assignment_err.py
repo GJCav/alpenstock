@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from alpenstock.pipeline import spec, transient, define_pipeline, stage_func
+
+
+@define_pipeline(save_path_field="save_to", kw_only=True)
+class AsyncStagePipeline:
+    spec_a: int = spec()
+    save_to: str | Path | None = transient(default=None)
+
+    @stage_func(id="step", order=0)
+    async def step(self) -> None:
+        return None
+
+
+p = AsyncStagePipeline(spec_a=1, save_to=None)
+value: None = p.step()

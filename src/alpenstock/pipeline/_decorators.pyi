@@ -1,12 +1,12 @@
 from pathlib import Path
-from typing import Any, Callable, TypeVar, dataclass_transform, overload
+from typing import Any, Awaitable, Callable, TypeVar, dataclass_transform, overload
 
 import attrs
 
 from ._fields import input, output, spec, state, transient
 
 _C = TypeVar("_C", bound=type)
-_F = TypeVar("_F", bound=Callable[..., None])
+_F = TypeVar("_F", Callable[[Any], None], Callable[[Any], Awaitable[None]])
 
 @overload
 @dataclass_transform(field_specifiers=(spec, state, output, input, transient, attrs.field))
@@ -26,7 +26,6 @@ def define_pipeline(
     kw_only: bool = False,
     **attrs_define_kwargs: Any,
 ) -> _C: ...
-
 
 def stage_func(*, id: str, order: int) -> Callable[[_F], _F]: ...
 

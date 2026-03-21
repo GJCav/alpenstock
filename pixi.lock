@@ -149,6 +149,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1c/6e/94b249c365e44c53fa89f419394b836635db26ce568fb36ecc54c2d868c6/pyright-1.1.350-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3b/ab/b3226f0bd7cdcf710fbede2b3548584366da3b19b5021e74f5bde2a8fa3f/pytest-9.0.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/e5/35/f8b19922b6a25bc0880171a2f1a003eaeb93657475193ab516fd87cac9da/pytest_asyncio-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/74/27/e5b8f34d02d9995b80abcef563ea1f8b56d20134d8f4e5e81733b1feceb2/pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/04/11/432f32f8097b03e3cd5fe57e88efb685d964e2e5178a48ed61e841f7fdce/pyyaml_env_tag-1.1-py3-none-any.whl
@@ -169,7 +170,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f1/7b/ce1eafaf1a76852e2ec9b22edecf1daa58175c090266e9f6c64afcd81d91/stack_data-0.6.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e6/34/ebdc18bae6aa14fbee1a08b63c015c72b64868ff7dae68808ab500c492e2/tinycss2-1.4.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/98/fb/5160261aeb5e1ee12ee95fe599d0541f7c976c3701d607d8fc29e623229f/torch-2.10.0-cp313-cp313-manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/ab/c6/4dfe238342ffdcec5aef1c96c457548762d33c40b45a1ab7033bb26d2ff2/torch-2.10.0-3-cp313-cp313-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/50/d4/e51d52047e7eb9a582da59f32125d17c0482d065afd5d3bc435ff2120dc5/tornado-6.5.4-cp39-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/00/c0/8f5d070730d7836adc9c9b6408dec68c6ced86b304a9b26a14df072a6e8c/traitlets-5.14.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f9/0b/37d991d8c130ce81a8728ae3c25b6e60935838e9be1b58791f5997b24a54/triton-3.6.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
@@ -295,6 +296,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1c/6e/94b249c365e44c53fa89f419394b836635db26ce568fb36ecc54c2d868c6/pyright-1.1.350-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3b/ab/b3226f0bd7cdcf710fbede2b3548584366da3b19b5021e74f5bde2a8fa3f/pytest-9.0.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/e5/35/f8b19922b6a25bc0880171a2f1a003eaeb93657475193ab516fd87cac9da/pytest_asyncio-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/de/3d/8161f7711c017e01ac9f008dfddd9410dff3674334c233bde66e7ba65bbf/pywin32_ctypes-0.2.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/97/c9/39d5b874e8b28845e4ec2202b5da735d0199dbe5b8fb85f91398814a9a46/pyyaml-6.0.3-cp313-cp313-win_amd64.whl
@@ -354,7 +356,7 @@ packages:
 - pypi: ./
   name: alpenstock
   version: 1.2.2
-  sha256: 3743768bd52cd2475a29ed5ef28365a1ad4cb53742a1038bcdfa2b10eb9d7592
+  sha256: 3d612aa6549f605cd35c78bbe41893cac7893050b27424809f16deafe661d302
   requires_dist:
   - loguru>=0.7.0
   - pydantic>=2.3.0
@@ -367,6 +369,7 @@ packages:
   - numpy ; extra == 'dev'
   - torch ; extra == 'dev'
   - pytest ; extra == 'dev'
+  - pytest-asyncio ; extra == 'dev'
   - pyright==1.1.350 ; extra == 'dev'
   - mkdocs-material ; extra == 'dev'
   - mkdocstrings[python] ; extra == 'dev'
@@ -2344,6 +2347,19 @@ packages:
   - setuptools ; extra == 'dev'
   - xmlschema ; extra == 'dev'
   requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/e5/35/f8b19922b6a25bc0880171a2f1a003eaeb93657475193ab516fd87cac9da/pytest_asyncio-1.3.0-py3-none-any.whl
+  name: pytest-asyncio
+  version: 1.3.0
+  sha256: 611e26147c7f77640e6d0a92a38ed17c3e9848063698d5c93d5aa7aa11cebff5
+  requires_dist:
+  - backports-asyncio-runner>=1.1,<2 ; python_full_version < '3.11'
+  - pytest>=8.2,<10
+  - typing-extensions>=4.12 ; python_full_version < '3.13'
+  - sphinx>=5.3 ; extra == 'docs'
+  - sphinx-rtd-theme>=1 ; extra == 'docs'
+  - coverage>=6.2 ; extra == 'testing'
+  - hypothesis>=5.7.1 ; extra == 'testing'
+  requires_python: '>=3.10'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.13.5-hec9711d_102_cp313.conda
   build_number: 102
   sha256: c2cdcc98ea3cbf78240624e4077e164dc9d5588eefb044b4097c3df54d24d504
@@ -2714,10 +2730,10 @@ packages:
   - optree>=0.13.0 ; extra == 'optree'
   - pyyaml ; extra == 'pyyaml'
   requires_python: '>=3.10'
-- pypi: https://files.pythonhosted.org/packages/98/fb/5160261aeb5e1ee12ee95fe599d0541f7c976c3701d607d8fc29e623229f/torch-2.10.0-cp313-cp313-manylinux_2_28_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/ab/c6/4dfe238342ffdcec5aef1c96c457548762d33c40b45a1ab7033bb26d2ff2/torch-2.10.0-3-cp313-cp313-manylinux_2_28_x86_64.whl
   name: torch
   version: 2.10.0
-  sha256: 6b71486353fce0f9714ca0c9ef1c850a2ae766b409808acd58e9678a3edb7738
+  sha256: 80b1b5bfe38eb0e9f5ff09f206dcac0a87aadd084230d4a36eea5ec5232c115b
   requires_dist:
   - filelock
   - typing-extensions>=4.10.0

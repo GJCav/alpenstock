@@ -255,6 +255,19 @@ def test_stage_signature_validation() -> None:
                 return None
 
 
+def test_async_stage_signature_validation() -> None:
+    with pytest.raises(TypeError, match="must accept no arguments"):
+
+        @define_pipeline(save_path_field="save_to", kw_only=True)
+        class InvalidAsyncStageSignature:
+            spec_a: int = spec()
+            save_to: str | Path | None = transient(default=None)
+
+            @stage_func(id="bad", order=0)
+            async def bad(self, x: int) -> None:
+                return None
+
+
 def test_spec_rejects_on_setattr_override() -> None:
     with pytest.raises(ValueError, match="does not allow overriding on_setattr"):
         spec(on_setattr=None)  # type: ignore[arg-type]

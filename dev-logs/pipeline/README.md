@@ -10,6 +10,7 @@
 4. [04 - Pipeline Review 3.md](./04%20-%20Pipeline%20Review%203.md)
 5. [05 - Pipeline Draft Revision 1.md](./05%20-%20Pipeline%20Draft%20Revision%201.md)
 6. [06 - Pipeline Review 4.md](./06%20-%20Pipeline%20Review%204.md)
+7. [07 - Pipeline Async Stage Design.md](./07%20-%20Pipeline%20Async%20Stage%20Design.md)
 
 ## 说明
 

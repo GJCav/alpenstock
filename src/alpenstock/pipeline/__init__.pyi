@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Callable, TypeVar, dataclass_transform, overload
+from typing import Any, Awaitable, Callable, TypeVar, dataclass_transform, overload
 
 import attrs
 
@@ -30,7 +30,7 @@ def define_pipeline(
     **attrs_define_kwargs: Any,
 ) -> _C: ...
 
-_F = TypeVar("_F", bound=Callable[..., None])
+_F = TypeVar("_F", Callable[[Any], None], Callable[[Any], Awaitable[None]])
 def stage_func(*, id: str, order: int) -> Callable[[_F], _F]: ...
 
 def get_state_dict(

@@ -2,7 +2,7 @@
 authors = [{name = "jcav", email = "micojcav@outlook.com"}]
 name = "alpenstock"
 requires-python = ">= 3.11"
-version = "1.2.2"
+version = "1.3.0"
 readme = "README.md"
 description = "A collection of handy Python utilities designed to help developers tackle the challenges of Python programming."
 
@@ -27,6 +27,7 @@ dev = [
     "numpy",
     "torch", 
     "pytest",
+    "pytest-asyncio",
     "pyright==1.1.350",
     "mkdocs-material",
     "mkdocstrings[python]",

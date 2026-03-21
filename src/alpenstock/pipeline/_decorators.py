@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from functools import wraps
 from pathlib import Path
@@ -39,6 +40,7 @@ class RuntimeState:
     cache_enabled: bool = False
     save_path: Path | None = None
     finished_stages: set[str] = field(default_factory=set)
+    running_stage_id: str | None = None
 
 
 _C = TypeVar("_C", bound=type)
@@ -123,14 +125,23 @@ def stage_func(*, id: str, order: int):
     if order < 0:
         raise ValueError(f"stage_func order must be >= 0, got {order}")
 
-    def decorator(fn: Callable[..., Any]) -> Callable[..., None]:
-        @wraps(fn)
-        def wrapped(self: Any, *args: Any, **kwargs: Any) -> None:
-            if args or kwargs:
-                raise TypeError(
-                    f"Stage {id!r} does not accept arguments; pass data through input/state/output fields"
-                )
-            return _run_stage(self, stage_id=id, stage_order=order, fn=fn)
+    def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+        if inspect.iscoroutinefunction(inspect.unwrap(fn)):
+            @wraps(fn)
+            async def wrapped(self: Any, *args: Any, **kwargs: Any) -> None:
+                if args or kwargs:
+                    raise TypeError(
+                        f"Stage {id!r} does not accept arguments; pass data through input/state/output fields"
+                    )
+                return await _run_stage_async(self, stage_id=id, stage_order=order, fn=fn)
+        else:
+            @wraps(fn)
+            def wrapped(self: Any, *args: Any, **kwargs: Any) -> None:
+                if args or kwargs:
+                    raise TypeError(
+                        f"Stage {id!r} does not accept arguments; pass data through input/state/output fields"
+                    )
+                return _run_stage(self, stage_id=id, stage_order=order, fn=fn)
 
         setattr(wrapped, STAGE_FN_ATTR, id)
         setattr(wrapped, STAGE_ORDER_ATTR, order)
@@ -231,33 +242,79 @@ def load_spec(
 def _run_stage(self: Any, *, stage_id: str, stage_order: int, fn: Callable[[Any], Any]) -> None:
     meta = _require_meta(type(self))
     runtime = _get_runtime_state(self)
-    _bootstrap_if_needed(self, meta=meta, runtime=runtime)
-    _enforce_stage_call_order(
-        meta=meta,
-        runtime=runtime,
-        stage_id=stage_id,
-        stage_order=stage_order,
-    )
+    _enter_stage_execution(runtime=runtime, stage_id=stage_id)
+    try:
+        _bootstrap_if_needed(self, meta=meta, runtime=runtime)
+        _enforce_stage_call_order(
+            meta=meta,
+            runtime=runtime,
+            stage_id=stage_id,
+            stage_order=stage_order,
+        )
 
-    if runtime.cache_enabled and runtime.save_path is not None:
-        stage_file = runtime.save_path / f"{stage_id}.pkl"
-        if stage_file.exists():
-            payload = _load_payload(self, stage_file)
-            _apply_payload(self, meta=meta, runtime=runtime, payload=payload)
-            if stage_id in runtime.finished_stages:
-                return None
+        if runtime.cache_enabled and runtime.save_path is not None:
+            stage_file = runtime.save_path / f"{stage_id}.pkl"
+            if stage_file.exists():
+                payload = _load_payload(self, stage_file)
+                _apply_payload(self, meta=meta, runtime=runtime, payload=payload)
+                if stage_id in runtime.finished_stages:
+                    return None
 
-    result = fn(self)
-    if result is not None:
-        raise TypeError(f"Stage {stage_id!r} must return None, got {type(result)!r}")
+        result = fn(self)
+        if result is not None:
+            raise TypeError(f"Stage {stage_id!r} must return None, got {type(result)!r}")
 
-    runtime.finished_stages.add(stage_id)
-    if runtime.cache_enabled and runtime.save_path is not None:
-        stage_file = runtime.save_path / f"{stage_id}.pkl"
-        payload = _build_payload(self, meta=meta, runtime=runtime)
-        _save_payload(self, stage_file, payload)
+        runtime.finished_stages.add(stage_id)
+        if runtime.cache_enabled and runtime.save_path is not None:
+            stage_file = runtime.save_path / f"{stage_id}.pkl"
+            payload = _build_payload(self, meta=meta, runtime=runtime)
+            _save_payload(self, stage_file, payload)
 
-    return None
+        return None
+    finally:
+        _exit_stage_execution(runtime=runtime, stage_id=stage_id)
+
+
+async def _run_stage_async(
+    self: Any,
+    *,
+    stage_id: str,
+    stage_order: int,
+    fn: Callable[[Any], Any],
+) -> None:
+    meta = _require_meta(type(self))
+    runtime = _get_runtime_state(self)
+    _enter_stage_execution(runtime=runtime, stage_id=stage_id)
+    try:
+        await asyncio.to_thread(_bootstrap_if_needed, self, meta=meta, runtime=runtime)
+        _enforce_stage_call_order(
+            meta=meta,
+            runtime=runtime,
+            stage_id=stage_id,
+            stage_order=stage_order,
+        )
+
+        if runtime.cache_enabled and runtime.save_path is not None:
+            stage_file = runtime.save_path / f"{stage_id}.pkl"
+            if await asyncio.to_thread(stage_file.exists):
+                payload = await asyncio.to_thread(_load_payload, self, stage_file)
+                _apply_payload(self, meta=meta, runtime=runtime, payload=payload)
+                if stage_id in runtime.finished_stages:
+                    return None
+
+        result = await fn(self)
+        if result is not None:
+            raise TypeError(f"Stage {stage_id!r} must return None, got {type(result)!r}")
+
+        runtime.finished_stages.add(stage_id)
+        if runtime.cache_enabled and runtime.save_path is not None:
+            stage_file = runtime.save_path / f"{stage_id}.pkl"
+            payload = _build_payload(self, meta=meta, runtime=runtime)
+            await asyncio.to_thread(_save_payload, self, stage_file, payload)
+
+        return None
+    finally:
+        _exit_stage_execution(runtime=runtime, stage_id=stage_id)
 
 
 
@@ -443,6 +500,10 @@ def _resolve_custom_hook(self: Any, hook_name: str) -> Callable[..., Any] | None
                 f"Custom hook {attr_name!r} on {cls.__name__} must be callable, "
                 f"got {type(hook)!r}"
             )
+        if inspect.iscoroutinefunction(inspect.unwrap(hook)):
+            raise TypeError(
+                f"Custom hook {attr_name!r} on {cls.__name__} must be synchronous"
+            )
         return hook
 
     return None
@@ -538,6 +599,22 @@ def _get_runtime_state(instance: Any) -> RuntimeState:
             f"Internal runtime storage {_RUNTIME_FIELD_NAME!r} must be RuntimeState, got {type(runtime)!r}"
         )
     return runtime
+
+
+def _enter_stage_execution(*, runtime: RuntimeState, stage_id: str) -> None:
+    running_stage_id = runtime.running_stage_id
+    if running_stage_id is not None:
+        raise ValueError(
+            "Invalid stage call order: "
+            f"stage {running_stage_id!r} is already running, so stage {stage_id!r} "
+            "cannot start. Concurrent stage execution on one pipeline instance is not supported."
+        )
+    runtime.running_stage_id = stage_id
+
+
+def _exit_stage_execution(*, runtime: RuntimeState, stage_id: str) -> None:
+    if runtime.running_stage_id == stage_id:
+        runtime.running_stage_id = None
 
 
 def _require_meta(cls: type) -> PipelineMeta:

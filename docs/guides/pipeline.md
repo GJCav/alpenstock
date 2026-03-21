@@ -6,7 +6,7 @@ This guide introduces Alpenstock's lightweight pipeline utility for stage-based 
 
 - No base class is required.
 - You define an `attrs` class and decorate it with `@define_pipeline(...)`.
-- Stage methods are decorated with `@stage_func(id="...", order=<int>)`.
+- Stage methods are decorated with `@stage_func(id="...", order=<int>)` and may be sync or async.
 - Cache files are saved under a user field bound via `save_path_field`.
 - Stage payload uses pickle by default, with optional `__saver/__loader` hooks.
 
@@ -67,10 +67,48 @@ class ToyPipeline:
         self.loss = self.w * self.w
 ```
 
+## Async Example
+
+```python
+import asyncio
+from pathlib import Path
+
+from alpenstock.pipeline import define_pipeline, stage_func, spec, input, state, output, transient
+
+@define_pipeline(save_path_field="save_to", kw_only=True)
+class AsyncToyPipeline:
+    spec_lr: float = spec()
+    x: float = input()
+    y: float = input()
+
+    w: float = state(default=0.0)
+    loss: float = output(default=0.0)
+
+    save_to: str | Path | None = transient(default=None)
+
+    async def run(self) -> None:
+        await self.init_stage()
+        await self.train_stage()
+
+    @stage_func(id="init", order=0)
+    async def init_stage(self) -> None:
+        await asyncio.sleep(0)
+        self.w = self.x + self.y
+
+    @stage_func(id="train", order=1)
+    async def train_stage(self) -> None:
+        await asyncio.sleep(0)
+        self.w = self.w - self.spec_lr
+        self.loss = self.w * self.w
+```
+
 ## Runtime Behavior
 
 - If `save_to` is `None`, no cache is used.
 - Stage calls are strictly ordered by ascending `order`; only the next stage can be called.
+- Async stages must be awaited from async entry methods.
+- Same-instance concurrent stage execution is unsupported and may fail fast.
+- Sync stages remain sync; if you call them from async code, they may block the event loop.
 - If `save_to` is set, bootstrap happens on the first stage call (not before the entry method):
   - validate `spec.yaml` (`spec_fields` + `field_schema`)
   - if `spec.yaml` is missing while any `*.pkl` snapshot exists, raise an error and require manual cleanup
@@ -89,7 +127,9 @@ class ToyPipeline:
 - Stage IDs must be unique in one class.
 - Stage IDs must match `^[A-Za-z0-9_]+$`.
 - Stage `order` must be an integer (`bool` is rejected), `>= 0`, and unique in one class hierarchy.
-- Stage methods must take only `self` and return `None`.
+- Stage methods must take only `self`.
+- Sync stage methods must return `None`.
+- Async stage methods must resolve to `None` when awaited.
 - Stage calls must be strictly sequential by `order`; calling a future or already-finished stage raises an error.
 - On resume, `spec_fields` and field schema (`name -> kind`) must match `spec.yaml`.
 - If `spec.yaml` is missing and any `*.pkl` exists, bootstrap treats cache as corrupted and raises.
@@ -114,6 +154,7 @@ Writes use atomic replace semantics.
 - Default stage payload serialization uses pickle.
 - You can override stage payload I/O by implementing `__saver(path, payload)` and `__loader(path)`.
 - Hook lookup supports Python name mangling, so `def __saver(...)` and `def __loader(...)` work as expected.
+- In async stage execution, the sync hooks are invoked in worker threads so they do not block the event loop.
 - Custom loader must return a `dict`.
 
 ## Helper Functions
@@ -172,4 +213,5 @@ If `spec.yaml` exists, `load_spec` validates cached `field_schema` against the p
 - Different pipelines should not share the same `save_to` directory.
 - No concurrency guarantees are provided for sharing one cache path across processes.
 - The framework rejects direct calls to non-next stages; users must call stages in strict `order`.
+- In async pipelines, `__saver/__loader` stay sync hooks and are run in worker threads; do not rely on them being awaitable.
 - `spec` freezing does not prevent in-place mutation of nested mutable objects (for example, `dict`/`list`).

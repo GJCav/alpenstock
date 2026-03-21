@@ -100,6 +100,8 @@ def _run_pyright(case_file: str) -> PyrightResult:
 @pytest.mark.parametrize(
     "case_file",
     [
+        "positive/async_stage_ok.py",
+        "positive/mixed_stage_types_ok.py",
         "positive/import_ctor_ok.py",
         "positive/field_helper_args_ok.py",
         "positive/kwonly_required_after_defaults_ok.py",
@@ -117,6 +119,10 @@ def test_pyright_positive_cases(case_file: str) -> None:
     ("case_file", "expected_rule", "fallback_substring"),
     [
         ("negative/ctor_unknown_arg_err.py", "reportCallIssue", "No parameter named"),
+        ("negative/async_stage_sync_assignment_err.py", "reportAssignmentType", "cannot be assigned"),
+        ("negative/async_stage_bad_return_type_err.py", "reportArgumentType", "cannot be assigned"),
+        ("negative/sync_stage_bad_return_type_err.py", "reportArgumentType", "cannot be assigned"),
+        ("negative/sync_stage_awaitable_assignment_err.py", "reportAssignmentType", "cannot be assigned"),
         ("negative/field_helper_hash_type_err.py", "reportArgumentType", "cannot be assigned"),
         ("negative/stage_call_with_arg_err.py", "reportCallIssue", "Expected 0 positional arguments"),
         ("negative/spec_on_setattr_err.py", "reportCallIssue", "No parameter named"),
