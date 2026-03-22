@@ -7,7 +7,16 @@ from pathlib import Path
 
 import pytest
 
-from alpenstock.pipeline import define_pipeline, input, output, spec, stage_func, state, transient
+from alpenstock.pipeline import (
+    define_pipeline,
+    input,
+    load_pipeline,
+    output,
+    spec,
+    stage_func,
+    state,
+    transient,
+)
 
 
 pytestmark = pytest.mark.asyncio
@@ -81,6 +90,25 @@ async def test_cache_hit_skips_async_stage_execution(tmp_path: Path) -> None:
     assert p2.y == 200
 
 
+async def test_read_only_load_pipeline_uses_async_cache_without_executing_stages(
+    tmp_path: Path,
+) -> None:
+    cache = tmp_path / "cache"
+
+    p1 = AsyncTwoStagePipeline(spec_scale=2, x=2, y=3, save_to=cache)
+    await p1.run()
+
+    p2 = load_pipeline(cls=AsyncTwoStagePipeline, save_to=cache)(x=100, y=200)
+    await p2.run()
+
+    assert p2.execution_log == []
+    assert p2.stage1_value == 10
+    assert p2.stage2_value == 11
+    assert p2.final_output == 110
+    assert p2.x == 100
+    assert p2.y == 200
+
+
 async def test_missing_last_stage_snapshot_reruns_only_missing_stage(tmp_path: Path) -> None:
     cache = tmp_path / "cache"
 
@@ -114,6 +142,58 @@ async def test_stage_without_finished_marker_gets_rerun(tmp_path: Path) -> None:
     assert p2.stage1_value == 10
     assert p2.final_output == 110
     assert stage2_path.exists()
+
+
+async def test_read_only_async_load_pipeline_missing_stage_snapshot_raises(
+    tmp_path: Path,
+) -> None:
+    cache = tmp_path / "cache"
+
+    p1 = AsyncTwoStagePipeline(spec_scale=2, x=2, y=3, save_to=cache)
+    await p1.run()
+    (cache / "stage2.pkl").unlink()
+
+    p2 = load_pipeline(cls=AsyncTwoStagePipeline, save_to=cache)()
+    with pytest.raises(FileNotFoundError, match="read_only=False"):
+        await p2.run()
+
+    assert p2.execution_log == []
+
+
+async def test_read_only_async_load_pipeline_incomplete_stage_snapshot_raises(
+    tmp_path: Path,
+) -> None:
+    cache = tmp_path / "cache"
+
+    p1 = AsyncTwoStagePipeline(spec_scale=2, x=2, y=3, save_to=cache)
+    await p1.run()
+
+    stage2_path = cache / "stage2.pkl"
+    _remove_finished_marker(stage2_path, "__stage_finished_stage2")
+
+    p2 = load_pipeline(cls=AsyncTwoStagePipeline, save_to=cache)()
+    with pytest.raises(ValueError, match="incomplete or unfinished"):
+        await p2.run()
+
+    assert p2.execution_log == []
+
+
+async def test_load_pipeline_read_write_mode_can_rerun_from_first_missing_async_stage(
+    tmp_path: Path,
+) -> None:
+    cache = tmp_path / "cache"
+
+    p1 = AsyncTwoStagePipeline(spec_scale=2, x=2, y=3, save_to=cache)
+    await p1.run()
+    (cache / "stage1.pkl").unlink()
+    (cache / "stage2.pkl").unlink()
+
+    p2 = load_pipeline(cls=AsyncTwoStagePipeline, save_to=cache, read_only=False)(x=100, y=200)
+    await p2.run()
+
+    assert p2.execution_log == ["stage1", "stage2"]
+    assert p2.stage1_value == 600
+    assert p2.final_output == 6010
 
 
 async def test_calling_later_async_stage_directly_raises_order_error(tmp_path: Path) -> None:

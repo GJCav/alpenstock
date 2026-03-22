@@ -32,7 +32,8 @@ def _expose_attrs_field_api(fn: Any) -> Any:
     """
     Copy public API metadata from `attrs.field` for better IDE tooltips.
     """
-    fn.__doc__ = attrs.field.__doc__
+    if fn.__doc__ is None:
+        fn.__doc__ = attrs.field.__doc__
     fn.__signature__ = _ATTRS_FIELD_SIGNATURE
     fn.__wrapped__ = attrs.field
     return fn
@@ -40,9 +41,21 @@ def _expose_attrs_field_api(fn: Any) -> Any:
 
 @_expose_attrs_field_api
 def spec(**kwargs: Any) -> Any:
+    """
+    Like ``attrs.field()``, but marks the field as pipeline ``spec``.
+
+    Additional restrictions:
+    - ``on_setattr`` cannot be overridden; spec fields are always frozen.
+    - ``init=False`` is not allowed; spec fields must be constructor-initialized.
+    """
     if "on_setattr" in kwargs:
         raise ValueError(
             "spec() does not allow overriding on_setattr; spec fields are always frozen"
+        )
+    if kwargs.get("init") is False:
+        raise ValueError(
+            "spec() does not allow init=False; "
+            "spec fields must be constructor-initialized"
         )
     kwargs["on_setattr"] = attrs.setters.frozen
     return _pipeline_field("spec", **kwargs)
@@ -60,6 +73,17 @@ def output(**kwargs: Any) -> Any:
 
 @_expose_attrs_field_api
 def input(**kwargs: Any) -> Any:
+    """
+    Like ``attrs.field()``, but marks the field as pipeline ``input``.
+
+    Additional restrictions:
+    - ``init=False`` is not allowed; input fields must be constructor-initialized.
+    """
+    if kwargs.get("init") is False:
+        raise ValueError(
+            "input() does not allow init=False; "
+            "input fields must be constructor-initialized"
+        )
     return _pipeline_field("input", **kwargs)
 
 

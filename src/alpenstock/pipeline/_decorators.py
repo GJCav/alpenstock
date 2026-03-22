@@ -4,7 +4,7 @@ import asyncio
 from dataclasses import dataclass, field
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, TypeVar, cast, dataclass_transform, overload
+from typing import Any, Callable, TypeVar, cast, dataclass_transform, get_type_hints, overload
 import inspect
 import re
 
@@ -20,7 +20,7 @@ from ._meta import (
     PipelineMeta,
     build_pipeline_meta,
 )
-from ._spec_io import load_spec_file, normalize_spec_value
+from ._spec_io import deserialize_spec_value, load_spec_file, normalize_spec_value
 from ._state_io import default_loader, default_saver
 
 
@@ -41,9 +41,11 @@ class RuntimeState:
     save_path: Path | None = None
     finished_stages: set[str] = field(default_factory=set)
     running_stage_id: str | None = None
+    read_only: bool = False
 
 
 _C = TypeVar("_C", bound=type)
+_P = TypeVar("_P")
 
 
 @overload
@@ -213,8 +215,9 @@ def load_spec(
     *,
     include_field_schema: bool = False,
 ) -> dict[str, Any] | None:
+    """Load saved spec values for a pipeline class from ``<save_to>/spec.yaml``."""
     if not isinstance(cls, type):
-        raise TypeError(f"load_spec expects a class type, got {type(cls)!r}")
+        raise TypeError(f"load_spec() expects a pipeline class, got {type(cls)!r}")
     meta = _require_meta(cls)
 
     spec_file = Path(save_to) / SPEC_FILE_NAME
@@ -230,13 +233,101 @@ def load_spec(
             "Field schema mismatch: current fields/kinds differ from cached spec.yaml"
         )
 
-    if include_field_schema:
-        return payload
-
     spec_fields = payload.get("spec_fields")
     if not isinstance(spec_fields, dict):
         raise ValueError(f"Invalid spec file content in {spec_file}: missing spec_fields mapping")
-    return spec_fields
+    deserialized_spec_fields = _deserialize_pipeline_spec_fields(
+        cls,
+        meta=meta,
+        spec_fields=spec_fields,
+    )
+    if include_field_schema:
+        full_payload = dict(payload)
+        full_payload["spec_fields"] = deserialized_spec_fields
+        return full_payload
+    return deserialized_spec_fields
+
+
+def load_pipeline(
+    *,
+    cls: type[_P],
+    save_to: str | Path,
+    read_only: bool = True,
+) -> Callable[..., _P]:
+    """Build a loader that reopens a pipeline instance from an existing cache directory."""
+    if not isinstance(cls, type):
+        raise TypeError(f"load_pipeline() expects a pipeline class, got {type(cls)!r}")
+
+    meta = _require_meta(cls)
+    spec_fields = load_spec(cls, save_to)
+    if spec_fields is None:
+        spec_file = Path(save_to) / SPEC_FILE_NAME
+        raise FileNotFoundError(
+            "load_pipeline() requires an existing cache directory with a saved spec file. "
+            f"Expected {spec_file}. Run the pipeline once first, or pass a valid cache path."
+        )
+
+    attrs_fields = _get_public_attrs_fields(cls)
+    fields_by_name = {field.name: field for field in attrs_fields}
+    spec_field_names = set(meta.fields_by_kind["spec"])
+    spec_override_keys = _build_reserved_override_keys(
+        fields_by_name[field_name] for field_name in spec_field_names
+    )
+    save_field = fields_by_name[meta.save_path_field]
+    save_override_keys = _build_reserved_override_keys((save_field,))
+
+    def factory(**overrides: Any) -> _P:
+        invalid_keys = sorted(spec_override_keys.intersection(overrides))
+        if invalid_keys:
+            names = ", ".join(repr(item) for item in invalid_keys)
+            raise TypeError(
+                "load_pipeline() does not accept overrides for saved spec fields. "
+                f"These values come from {Path(save_to) / SPEC_FILE_NAME}: {names}"
+            )
+
+        invalid_save_keys = sorted(save_override_keys.intersection(overrides))
+        if invalid_save_keys:
+            names = ", ".join(repr(item) for item in invalid_save_keys)
+            raise TypeError(
+                "load_pipeline() always binds the pipeline save path from the outer "
+                f"`save_to=` argument, so these overrides are not allowed: {names}"
+            )
+
+        ctor_kwargs: dict[str, Any] = {}
+
+        for field_name, value in spec_fields.items():
+            field = fields_by_name[field_name]
+            if field.init:
+                ctor_kwargs[_field_ctor_key(field)] = value
+
+        if save_field.init:
+            ctor_kwargs[_field_ctor_key(save_field)] = save_to
+
+        ctor_kwargs.update(overrides)
+
+        if read_only:
+            for field_name in meta.fields_by_kind["input"]:
+                field = fields_by_name[field_name]
+                if not field.init:
+                    continue
+                ctor_key = _field_ctor_key(field)
+                if ctor_key in ctor_kwargs or field.default is not attrs.NOTHING:
+                    continue
+                ctor_kwargs[ctor_key] = None
+
+        instance = cls(**ctor_kwargs)
+        if not save_field.init:
+            _validate_loaded_save_path(
+                instance,
+                meta=meta,
+                expected_save_to=save_to,
+            )
+
+        runtime = _get_runtime_state(instance)
+        runtime.read_only = read_only
+        return instance
+
+    return factory
 
 
 def _run_stage(self: Any, *, stage_id: str, stage_order: int, fn: Callable[[Any], Any]) -> None:
@@ -252,13 +343,13 @@ def _run_stage(self: Any, *, stage_id: str, stage_order: int, fn: Callable[[Any]
             stage_order=stage_order,
         )
 
-        if runtime.cache_enabled and runtime.save_path is not None:
-            stage_file = runtime.save_path / f"{stage_id}.pkl"
-            if stage_file.exists():
-                payload = _load_payload(self, stage_file)
-                _apply_payload(self, meta=meta, runtime=runtime, payload=payload)
-                if stage_id in runtime.finished_stages:
-                    return None
+        if _restore_stage_from_cache(self, meta=meta, runtime=runtime, stage_id=stage_id):
+            return None
+
+        if runtime.read_only:
+            raise RuntimeError(
+                f"Read-only pipeline cannot execute stage body for stage {stage_id!r}"
+            )
 
         result = fn(self)
         if result is not None:
@@ -294,13 +385,20 @@ async def _run_stage_async(
             stage_order=stage_order,
         )
 
-        if runtime.cache_enabled and runtime.save_path is not None:
-            stage_file = runtime.save_path / f"{stage_id}.pkl"
-            if await asyncio.to_thread(stage_file.exists):
-                payload = await asyncio.to_thread(_load_payload, self, stage_file)
-                _apply_payload(self, meta=meta, runtime=runtime, payload=payload)
-                if stage_id in runtime.finished_stages:
-                    return None
+        restored = await asyncio.to_thread(
+            _restore_stage_from_cache,
+            self,
+            meta=meta,
+            runtime=runtime,
+            stage_id=stage_id,
+        )
+        if restored:
+            return None
+
+        if runtime.read_only:
+            raise RuntimeError(
+                f"Read-only pipeline cannot execute stage body for stage {stage_id!r}"
+            )
 
         result = await fn(self)
         if result is not None:
@@ -324,13 +422,25 @@ def _bootstrap_if_needed(self: Any, *, meta: PipelineMeta, runtime: RuntimeState
 
     raw_save_path = getattr(self, meta.save_path_field)
     if raw_save_path is None:
+        if runtime.read_only:
+            raise ValueError(
+                "Read-only pipeline requires a cache directory. "
+                f"Field {meta.save_path_field!r} is None."
+            )
         runtime.cache_enabled = False
         runtime.bootstrapped = True
         return
 
     runtime.cache_enabled = True
     runtime.save_path = Path(raw_save_path)
-    runtime.save_path.mkdir(parents=True, exist_ok=True)
+    if runtime.read_only:
+        if not runtime.save_path.exists():
+            raise FileNotFoundError(
+                "Read-only pipeline expected an existing cache directory at "
+                f"{runtime.save_path}. Run the pipeline once first, or use read_only=False."
+            )
+    else:
+        runtime.save_path.mkdir(parents=True, exist_ok=True)
 
     current_spec = _collect_spec_fields(self, meta)
     current_schema = {k: v for k, v in meta.field_schema.items()}
@@ -351,6 +461,11 @@ def _bootstrap_if_needed(self: Any, *, meta: PipelineMeta, runtime: RuntimeState
             raise ValueError(
                 "Invalid cache layout: spec.yaml is missing but stage snapshot files (*.pkl) exist. "
                 "Cache appears corrupted; please clean cache directory manually."
+            )
+        if runtime.read_only:
+            raise FileNotFoundError(
+                "Read-only pipeline expected a saved spec file at "
+                f"{spec_file}. Run the pipeline once first, or use read_only=False."
             )
         _write_spec_file(spec_file, {
             "spec_fields": current_spec,
@@ -407,6 +522,40 @@ def _build_payload(self: Any, *, meta: PipelineMeta, runtime: RuntimeState) -> d
         payload[f"{STAGE_FINISHED_PREFIX}{stage_id}"] = True
 
     return payload
+
+
+def _restore_stage_from_cache(
+    self: Any,
+    *,
+    meta: PipelineMeta,
+    runtime: RuntimeState,
+    stage_id: str,
+) -> bool:
+    if not runtime.cache_enabled or runtime.save_path is None:
+        return False
+
+    stage_file = runtime.save_path / f"{stage_id}.pkl"
+    if not stage_file.exists():
+        if runtime.read_only:
+            raise FileNotFoundError(
+                "Read-only pipeline cannot continue because the cache is missing the "
+                f"snapshot for stage {stage_id!r}: {stage_file}. "
+                "Re-run with read_only=False to rebuild missing stages."
+            )
+        return False
+
+    payload = _load_payload(self, stage_file)
+    _apply_payload(self, meta=meta, runtime=runtime, payload=payload)
+    if stage_id in runtime.finished_stages:
+        return True
+
+    if runtime.read_only:
+        raise ValueError(
+            "Read-only pipeline found a snapshot for stage "
+            f"{stage_id!r}, but it is incomplete or unfinished. "
+            "Re-run with read_only=False to rebuild that stage."
+        )
+    return False
 
 
 
@@ -599,6 +748,82 @@ def _get_runtime_state(instance: Any) -> RuntimeState:
             f"Internal runtime storage {_RUNTIME_FIELD_NAME!r} must be RuntimeState, got {type(runtime)!r}"
         )
     return runtime
+
+
+def _get_public_attrs_fields(cls: type[Any]) -> tuple[attrs.Attribute[Any], ...]:
+    return tuple(
+        field
+        for field in attrs.fields(cls)
+        if field.metadata.get(PIPELINE_INTERNAL_FIELD_METADATA_KEY) is not True
+    )
+
+
+def _field_ctor_key(field: attrs.Attribute[Any]) -> str:
+    alias = getattr(field, "alias", None)
+    if isinstance(alias, str):
+        return alias
+    return field.name
+
+
+def _build_reserved_override_keys(
+    fields: Any,
+) -> set[str]:
+    reserved_keys: set[str] = set()
+    for field in fields:
+        reserved_keys.add(field.name)
+        reserved_keys.add(_field_ctor_key(field))
+    return reserved_keys
+
+
+def _validate_loaded_save_path(
+    instance: Any,
+    *,
+    meta: PipelineMeta,
+    expected_save_to: str | Path,
+) -> None:
+    actual_save_to = getattr(instance, meta.save_path_field)
+    if actual_save_to is None:
+        raise TypeError(
+            "load_pipeline() cannot set init=False save path fields after construction. "
+            f"Constructor field {meta.save_path_field!r} must initialize itself to "
+            f"{Path(expected_save_to)!r}."
+        )
+    if Path(actual_save_to) != Path(expected_save_to):
+        raise TypeError(
+            "load_pipeline() expected the constructor to initialize "
+            f"{meta.save_path_field!r} to {Path(expected_save_to)!r}, "
+            f"but got {actual_save_to!r}."
+        )
+
+
+def _deserialize_pipeline_spec_fields(
+    cls: type[Any],
+    *,
+    meta: PipelineMeta,
+    spec_fields: dict[str, Any],
+) -> dict[str, Any]:
+    type_hints = _safe_get_type_hints(cls)
+    attrs_fields = {field.name: field for field in _get_public_attrs_fields(cls)}
+
+    result: dict[str, Any] = {}
+    for field_name in meta.fields_by_kind["spec"]:
+        if field_name not in spec_fields:
+            continue
+        field = attrs_fields[field_name]
+        annotation = type_hints.get(field_name, field.type)
+        result[field_name] = deserialize_spec_value(
+            spec_fields[field_name],
+            annotation,
+            path=f"spec.{field_name}",
+        )
+    return result
+
+
+def _safe_get_type_hints(cls: type[Any]) -> dict[str, Any]:
+    try:
+        return get_type_hints(cls, include_extras=True)
+    except Exception:
+        return {}
 
 
 def _enter_stage_execution(*, runtime: RuntimeState, stage_id: str) -> None:

@@ -103,6 +103,7 @@ def _run_pyright(case_file: str) -> PyrightResult:
         "positive/async_stage_ok.py",
         "positive/mixed_stage_types_ok.py",
         "positive/import_ctor_ok.py",
+        "positive/load_pipeline_ok.py",
         "positive/field_helper_args_ok.py",
         "positive/kwonly_required_after_defaults_ok.py",
     ],

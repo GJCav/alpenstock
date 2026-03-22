@@ -7,6 +7,7 @@ from ._fields import input, output, spec, state, transient
 
 _C = TypeVar("_C", bound=type)
 _F = TypeVar("_F", Callable[[Any], None], Callable[[Any], Awaitable[None]])
+_P = TypeVar("_P")
 
 @overload
 @dataclass_transform(field_specifiers=(spec, state, output, input, transient, attrs.field))
@@ -46,3 +47,10 @@ def load_spec(
     *,
     include_field_schema: bool = False,
 ) -> dict[str, Any] | None: ...
+
+def load_pipeline(
+    *,
+    cls: type[_P],
+    save_to: str | Path,
+    read_only: bool = True,
+) -> Callable[..., _P]: ...

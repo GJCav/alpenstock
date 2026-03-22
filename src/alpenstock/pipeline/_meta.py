@@ -66,6 +66,11 @@ def build_pipeline_meta(cls: type, *, save_path_field: str) -> PipelineMeta:
         kind = get_field_kind(field)
         field_schema[field.name] = kind
         grouped[kind].append(field.name)
+        if kind in {"spec", "input"} and not field.init:
+            raise ValueError(
+                f"Field {field.name!r} is marked as {kind} but has init=False. "
+                f"{kind.capitalize()} fields must be constructor-initialized."
+            )
 
     if field_schema[save_path_field] != "transient":
         raise ValueError(

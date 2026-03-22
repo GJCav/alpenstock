@@ -119,11 +119,16 @@ class AsyncToyPipeline:
   - stage body is skipped when its finished marker exists
   - `state` and `output` are restored from snapshot
   - `input` and `transient` keep current instance values
+- In read-only mode, after the instance has been constructed:
+  - bootstrap does not create cache directories or write `spec.yaml`
+  - stage calls only restore from existing snapshots and do not execute the stage body
+  - missing or incomplete stage snapshots raise an error immediately
 
 ## Validation Rules
 
 - `save_path_field` must point to a `transient` field.
 - `save_path_field` annotation must be compatible with `str | Path` (optionally `None`).
+- `spec` and `input` fields must be constructor-initialized (`init=False` is not allowed).
 - Stage IDs must be unique in one class.
 - Stage IDs must match `^[A-Za-z0-9_]+$`.
 - Stage `order` must be an integer (`bool` is rejected), `>= 0`, and unique in one class hierarchy.
@@ -159,9 +164,10 @@ Writes use atomic replace semantics.
 
 ## Helper Functions
 
-The module also exposes two global helper functions:
+The module also exposes three global helper functions:
 
 - `get_state_dict(ins, *, spec=False, input=False, state=True, transient=False, output=True, include_finished_markers=False)`
+- `load_pipeline(*, cls, save_to, read_only=True)(**overrides)`
 - `load_spec(cls, save_to, *, include_field_schema=False)`
 
 `get_state_dict` returns grouped runtime data by kind. Example:
@@ -196,6 +202,38 @@ snapshot = get_state_dict(
 When `include_finished_markers=True`, markers come from the current instance runtime memory only.
 The function does not bootstrap or read cache files from disk.
 
+`load_pipeline` is a convenience helper for reopening an existing cache:
+
+```python
+from pathlib import Path
+from alpenstock.pipeline import load_pipeline
+
+p = load_pipeline(
+    cls=ToyPipeline,
+    save_to=Path("./cache"),
+)()
+p.run()  # only restores cached stages; does not execute stage bodies
+print(p.loss)
+
+p_rw = load_pipeline(
+    cls=ToyPipeline,
+    save_to=Path("./cache"),
+    read_only=False,
+)(x=1.0, y=2.0)
+```
+
+Behavior:
+
+- The outer call controls loader behavior (`cls`, `save_to`, `read_only`).
+- The inner call forwards keyword overrides to the pipeline constructor.
+- Saved `spec` fields are always loaded from `spec.yaml`; constructor overrides cannot replace them.
+- The configured `save_path_field` is always bound from the outer `save_to` argument; do not pass it again in the inner overrides.
+- In read-only mode, missing required `input` fields are auto-filled with `None` if the constructor still needs them.
+- In read-only mode, the returned instance reuses existing cache on stage calls; missing `spec.yaml`, a missing stage snapshot, or an incomplete stage snapshot raise clear errors instead of rebuilding cache through normal stage execution.
+- In read-write mode, normal cache/resume behavior is preserved, so callers should pass real input values.
+- `load_pipeline` does not backfill `init=False` fields after construction. If `save_path_field` is `init=False`, the constructor itself must initialize it to the provided `save_to`.
+- `load_pipeline` type hints are intentionally approximate. Runtime checks and this guide define the exact calling constraints.
+
 `load_spec` reads `<save_to>/spec.yaml` for a pipeline class:
 
 ```python
@@ -205,6 +243,20 @@ full_spec = load_spec(ToyPipeline, Path("./cache"), include_field_schema=True)
 
 If `spec.yaml` does not exist, `load_spec` returns `None`.
 If `spec.yaml` exists, `load_spec` validates cached `field_schema` against the provided pipeline class.
+For supported annotations, `load_spec` also reconstructs spec values back into Python objects:
+
+- container types such as `list[...]`, `tuple[...]`, and `dict[str, ...]` are rebuilt recursively
+- Python `dataclass` types are rebuilt recursively from their field annotations
+- `attrs.define` classes and pydantic models receive the cached mapping and handle their own construction for constructor-initialized fields
+- unsupported or unconstrained annotations fall back to the raw YAML-loaded value
+- `spec(init=False)` and `input(init=False)` are unsupported by design and rejected when defining the pipeline
+
+## Best Practices
+
+- Keep `__attrs_post_init__` lightweight. It is fine for setup work such as allocating buffers or preparing lightweight runtime objects.
+- Put real data loading, expensive initialization, and any logic that depends on `input` into the first stage whenever possible.
+- `load_pipeline(..., read_only=True)` is a best-effort reopen mode. Constructor hooks such as `__attrs_post_init__` still run during instance creation, so strict read-only behavior only applies once stage wrappers take over.
+- This keeps cache, resume, and read-only reopening behavior aligned: `load_pipeline(..., read_only=True)` works best when constructor hooks do not perform stage-like work.
 
 ## Notes and Limitations
 
@@ -215,3 +267,4 @@ If `spec.yaml` exists, `load_spec` validates cached `field_schema` against the p
 - The framework rejects direct calls to non-next stages; users must call stages in strict `order`.
 - In async pipelines, `__saver/__loader` stay sync hooks and are run in worker threads; do not rely on them being awaitable.
 - `spec` freezing does not prevent in-place mutation of nested mutable objects (for example, `dict`/`list`).
+- `load_pipeline` is best suited for inspecting or reopening an existing cache. If a class validates or consumes `input` during construction, callers may still need to provide those fields explicitly even in read-only mode.

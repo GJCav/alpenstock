@@ -10,6 +10,7 @@ from ._fields import state as state
 from ._fields import transient as transient
 
 _C = TypeVar("_C", bound=type)
+_P = TypeVar("_P")
 
 @overload
 @dataclass_transform(field_specifiers=(spec, state, output, input, transient, attrs.field))
@@ -51,10 +52,18 @@ def load_spec(
     include_field_schema: bool = False,
 ) -> dict[str, Any] | None: ...
 
+def load_pipeline(
+    *,
+    cls: type[_P],
+    save_to: str | Path,
+    read_only: bool = True,
+) -> Callable[..., _P]: ...
+
 __all__ = [
     "define_pipeline",
     "stage_func",
     "get_state_dict",
+    "load_pipeline",
     "load_spec",
     "spec",
     "state",

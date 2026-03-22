@@ -5,9 +5,19 @@ from dataclasses import dataclass
 import pickle
 from pathlib import Path
 
+import attrs
 import pytest
 
-from alpenstock.pipeline import input, output, spec, state, transient, define_pipeline, stage_func
+from alpenstock.pipeline import (
+    define_pipeline,
+    input,
+    load_pipeline,
+    output,
+    spec,
+    stage_func,
+    state,
+    transient,
+)
 import alpenstock.pipeline._state_io as state_io
 
 
@@ -69,6 +79,23 @@ def test_cache_hit_skips_stage_execution(tmp_path: Path) -> None:
     assert p2.y == 200
 
 
+def test_read_only_load_pipeline_uses_cache_without_executing_stages(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+
+    p1 = TwoStagePipeline(spec_scale=2, x=2, y=3, save_to=cache)
+    p1.run()
+
+    p2 = load_pipeline(cls=TwoStagePipeline, save_to=cache)(x=100, y=200)
+    p2.run()
+
+    assert p2.execution_log == []
+    assert p2.stage1_value == 10
+    assert p2.stage2_value == 11
+    assert p2.final_output == 110
+    assert p2.x == 100
+    assert p2.y == 200
+
+
 def test_missing_last_stage_snapshot_reruns_only_missing_stage(tmp_path: Path) -> None:
     cache = tmp_path / "cache"
 
@@ -103,6 +130,38 @@ def test_stage_without_finished_marker_gets_rerun(tmp_path: Path) -> None:
     assert p2.final_output == 110
 
 
+def test_read_only_load_pipeline_missing_stage_snapshot_raises(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+
+    p1 = TwoStagePipeline(spec_scale=2, x=2, y=3, save_to=cache)
+    p1.run()
+    (cache / "stage2.pkl").unlink()
+
+    p2 = load_pipeline(cls=TwoStagePipeline, save_to=cache)()
+    with pytest.raises(FileNotFoundError, match="read_only=False"):
+        p2.run()
+
+    assert p2.execution_log == []
+
+
+def test_read_only_load_pipeline_incomplete_stage_snapshot_raises(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+
+    p1 = TwoStagePipeline(spec_scale=2, x=2, y=3, save_to=cache)
+    p1.run()
+
+    stage2_path = cache / "stage2.pkl"
+    payload = pickle.loads(stage2_path.read_bytes())
+    del payload["__stage_finished_stage2"]
+    stage2_path.write_bytes(pickle.dumps(payload))
+
+    p2 = load_pipeline(cls=TwoStagePipeline, save_to=cache)()
+    with pytest.raises(ValueError, match="incomplete or unfinished"):
+        p2.run()
+
+    assert p2.execution_log == []
+
+
 def test_missing_previous_stage_with_later_snapshot_raises(tmp_path: Path) -> None:
     cache = tmp_path / "cache"
 
@@ -127,6 +186,33 @@ def test_missing_spec_with_existing_stage_snapshots_raises(tmp_path: Path) -> No
     p2 = TwoStagePipeline(spec_scale=2, x=2, y=3, save_to=cache)
     with pytest.raises(ValueError, match="spec.yaml is missing"):
         p2.run()
+
+
+def test_load_pipeline_read_write_mode_can_rerun_from_first_missing_stage(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+
+    p1 = TwoStagePipeline(spec_scale=2, x=2, y=3, save_to=cache)
+    p1.run()
+    (cache / "stage1.pkl").unlink()
+    (cache / "stage2.pkl").unlink()
+
+    p2 = load_pipeline(cls=TwoStagePipeline, save_to=cache, read_only=False)(x=100, y=200)
+    p2.run()
+
+    assert p2.execution_log == ["stage1", "stage2"]
+    assert p2.stage1_value == 600
+    assert p2.final_output == 6010
+
+
+def test_load_pipeline_read_write_mode_requires_real_inputs(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+
+    p1 = TwoStagePipeline(spec_scale=2, x=2, y=3, save_to=cache)
+    p1.run()
+
+    loader = load_pipeline(cls=TwoStagePipeline, save_to=cache, read_only=False)
+    with pytest.raises(TypeError):
+        loader()
 
 
 def test_missing_spec_without_stage_snapshots_bootstraps_as_fresh_cache(tmp_path: Path) -> None:
@@ -414,6 +500,12 @@ class MultiFieldPipeline:
         self.result = self.acc * 2
 
 
+@attrs.define
+class ReloadAliasedSpec:
+    alpha: int = attrs.field(alias="alpha_value")
+    beta: list[int] = attrs.field(alias="beta_values")
+
+
 def test_multifield_spec_and_stage_cache(tmp_path: Path) -> None:
     cache = tmp_path / "cache"
 
@@ -529,3 +621,44 @@ def test_spec_supports_dataclass(tmp_path: Path) -> None:
     p2 = DataclassSpecPipeline(main_spec=ExtraSpec(alpha=1, beta=[2, 3]), x=100, save_to=cache)
     p2.run()
     assert p2.v == 11
+
+
+def test_load_pipeline_read_write_mode_reconstructs_aliased_attrs_spec_for_rerun(
+    tmp_path: Path,
+) -> None:
+    @define_pipeline(save_path_field="save_to", kw_only=True)
+    class AliasedAttrsSpecPipeline:
+        main_spec: ReloadAliasedSpec = spec()
+        x: int = input()
+        stage1_value: int = state(default=0)
+        final_value: int = output(default=0)
+        save_to: str | Path | None = transient(default=None)
+
+        def run(self) -> None:
+            self.stage1()
+            self.stage2()
+
+        @stage_func(id="stage1", order=0)
+        def stage1(self) -> None:
+            self.stage1_value = self.main_spec.alpha + sum(self.main_spec.beta) + self.x
+
+        @stage_func(id="stage2", order=1)
+        def stage2(self) -> None:
+            self.final_value = self.stage1_value + self.main_spec.alpha
+
+    cache = tmp_path / "cache"
+    p1 = AliasedAttrsSpecPipeline(
+        main_spec=ReloadAliasedSpec(alpha_value=1, beta_values=[2, 3]),
+        x=5,
+        save_to=cache,
+    )
+    p1.run()
+    (cache / "stage1.pkl").unlink()
+    (cache / "stage2.pkl").unlink()
+
+    p2 = load_pipeline(cls=AliasedAttrsSpecPipeline, save_to=cache, read_only=False)(x=100)
+    p2.run()
+
+    assert isinstance(p2.main_spec, ReloadAliasedSpec)
+    assert p2.stage1_value == 106
+    assert p2.final_value == 107
