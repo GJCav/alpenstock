@@ -85,7 +85,7 @@ def test_read_only_load_pipeline_uses_cache_without_executing_stages(tmp_path: P
     p1 = TwoStagePipeline(spec_scale=2, x=2, y=3, save_to=cache)
     p1.run()
 
-    p2 = load_pipeline(cls=TwoStagePipeline, save_to=cache)(x=100, y=200)
+    p2 = load_pipeline(cls=TwoStagePipeline, cache_dir=cache)(x=100, y=200)
     p2.run()
 
     assert p2.execution_log == []
@@ -137,7 +137,7 @@ def test_read_only_load_pipeline_missing_stage_snapshot_raises(tmp_path: Path) -
     p1.run()
     (cache / "stage2.pkl").unlink()
 
-    p2 = load_pipeline(cls=TwoStagePipeline, save_to=cache)()
+    p2 = load_pipeline(cls=TwoStagePipeline, cache_dir=cache)()
     with pytest.raises(FileNotFoundError, match="read_only=False"):
         p2.run()
 
@@ -155,7 +155,7 @@ def test_read_only_load_pipeline_incomplete_stage_snapshot_raises(tmp_path: Path
     del payload["__stage_finished_stage2"]
     stage2_path.write_bytes(pickle.dumps(payload))
 
-    p2 = load_pipeline(cls=TwoStagePipeline, save_to=cache)()
+    p2 = load_pipeline(cls=TwoStagePipeline, cache_dir=cache)()
     with pytest.raises(ValueError, match="incomplete or unfinished"):
         p2.run()
 
@@ -196,7 +196,7 @@ def test_load_pipeline_read_write_mode_can_rerun_from_first_missing_stage(tmp_pa
     (cache / "stage1.pkl").unlink()
     (cache / "stage2.pkl").unlink()
 
-    p2 = load_pipeline(cls=TwoStagePipeline, save_to=cache, read_only=False)(x=100, y=200)
+    p2 = load_pipeline(cls=TwoStagePipeline, cache_dir=cache, read_only=False)(x=100, y=200)
     p2.run()
 
     assert p2.execution_log == ["stage1", "stage2"]
@@ -210,7 +210,7 @@ def test_load_pipeline_read_write_mode_requires_real_inputs(tmp_path: Path) -> N
     p1 = TwoStagePipeline(spec_scale=2, x=2, y=3, save_to=cache)
     p1.run()
 
-    loader = load_pipeline(cls=TwoStagePipeline, save_to=cache, read_only=False)
+    loader = load_pipeline(cls=TwoStagePipeline, cache_dir=cache, read_only=False)
     with pytest.raises(TypeError):
         loader()
 
@@ -656,7 +656,7 @@ def test_load_pipeline_read_write_mode_reconstructs_aliased_attrs_spec_for_rerun
     (cache / "stage1.pkl").unlink()
     (cache / "stage2.pkl").unlink()
 
-    p2 = load_pipeline(cls=AliasedAttrsSpecPipeline, save_to=cache, read_only=False)(x=100)
+    p2 = load_pipeline(cls=AliasedAttrsSpecPipeline, cache_dir=cache, read_only=False)(x=100)
     p2.run()
 
     assert isinstance(p2.main_spec, ReloadAliasedSpec)

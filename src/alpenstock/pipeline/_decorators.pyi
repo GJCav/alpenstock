@@ -51,6 +51,6 @@ def load_spec(
 def load_pipeline(
     *,
     cls: type[_P],
-    save_to: str | Path,
+    cache_dir: str | Path,
     read_only: bool = True,
 ) -> Callable[..., _P]: ...

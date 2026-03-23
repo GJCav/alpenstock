@@ -98,7 +98,7 @@ async def test_read_only_load_pipeline_uses_async_cache_without_executing_stages
     p1 = AsyncTwoStagePipeline(spec_scale=2, x=2, y=3, save_to=cache)
     await p1.run()
 
-    p2 = load_pipeline(cls=AsyncTwoStagePipeline, save_to=cache)(x=100, y=200)
+    p2 = load_pipeline(cls=AsyncTwoStagePipeline, cache_dir=cache)(x=100, y=200)
     await p2.run()
 
     assert p2.execution_log == []
@@ -153,7 +153,7 @@ async def test_read_only_async_load_pipeline_missing_stage_snapshot_raises(
     await p1.run()
     (cache / "stage2.pkl").unlink()
 
-    p2 = load_pipeline(cls=AsyncTwoStagePipeline, save_to=cache)()
+    p2 = load_pipeline(cls=AsyncTwoStagePipeline, cache_dir=cache)()
     with pytest.raises(FileNotFoundError, match="read_only=False"):
         await p2.run()
 
@@ -171,7 +171,7 @@ async def test_read_only_async_load_pipeline_incomplete_stage_snapshot_raises(
     stage2_path = cache / "stage2.pkl"
     _remove_finished_marker(stage2_path, "__stage_finished_stage2")
 
-    p2 = load_pipeline(cls=AsyncTwoStagePipeline, save_to=cache)()
+    p2 = load_pipeline(cls=AsyncTwoStagePipeline, cache_dir=cache)()
     with pytest.raises(ValueError, match="incomplete or unfinished"):
         await p2.run()
 
@@ -188,7 +188,7 @@ async def test_load_pipeline_read_write_mode_can_rerun_from_first_missing_async_
     (cache / "stage1.pkl").unlink()
     (cache / "stage2.pkl").unlink()
 
-    p2 = load_pipeline(cls=AsyncTwoStagePipeline, save_to=cache, read_only=False)(x=100, y=200)
+    p2 = load_pipeline(cls=AsyncTwoStagePipeline, cache_dir=cache, read_only=False)(x=100, y=200)
     await p2.run()
 
     assert p2.execution_log == ["stage1", "stage2"]

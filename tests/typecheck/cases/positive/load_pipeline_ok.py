@@ -31,7 +31,7 @@ class GoodPipeline:
         self.out = self.spec_a + self.x
 
 
-loader = load_pipeline(cls=GoodPipeline, save_to=Path("./cache"))
+loader = load_pipeline(cls=GoodPipeline, cache_dir=Path("./cache"))
 p1 = loader()
 p2 = loader(x=1)
 p1.run()

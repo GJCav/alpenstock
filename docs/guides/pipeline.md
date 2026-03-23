@@ -167,7 +167,7 @@ Writes use atomic replace semantics.
 The module also exposes three global helper functions:
 
 - `get_state_dict(ins, *, spec=False, input=False, state=True, transient=False, output=True, include_finished_markers=False)`
-- `load_pipeline(*, cls, save_to, read_only=True)(**overrides)`
+- `load_pipeline(*, cls, cache_dir, read_only=True)(**overrides)`
 - `load_spec(cls, save_to, *, include_field_schema=False)`
 
 `get_state_dict` returns grouped runtime data by kind. Example:
@@ -210,28 +210,28 @@ from alpenstock.pipeline import load_pipeline
 
 p = load_pipeline(
     cls=ToyPipeline,
-    save_to=Path("./cache"),
+    cache_dir=Path("./cache"),
 )()
 p.run()  # only restores cached stages; does not execute stage bodies
 print(p.loss)
 
 p_rw = load_pipeline(
     cls=ToyPipeline,
-    save_to=Path("./cache"),
+    cache_dir=Path("./cache"),
     read_only=False,
 )(x=1.0, y=2.0)
 ```
 
 Behavior:
 
-- The outer call controls loader behavior (`cls`, `save_to`, `read_only`).
+- The outer call controls loader behavior (`cls`, `cache_dir`, `read_only`).
 - The inner call forwards keyword overrides to the pipeline constructor.
 - Saved `spec` fields are always loaded from `spec.yaml`; constructor overrides cannot replace them.
-- The configured `save_path_field` is always bound from the outer `save_to` argument; do not pass it again in the inner overrides.
+- The configured `save_path_field` is always bound from the outer `cache_dir` argument; do not pass it again in the inner overrides.
 - In read-only mode, missing required `input` fields are auto-filled with `None` if the constructor still needs them.
 - In read-only mode, the returned instance reuses existing cache on stage calls; missing `spec.yaml`, a missing stage snapshot, or an incomplete stage snapshot raise clear errors instead of rebuilding cache through normal stage execution.
 - In read-write mode, normal cache/resume behavior is preserved, so callers should pass real input values.
-- `load_pipeline` does not backfill `init=False` fields after construction. If `save_path_field` is `init=False`, the constructor itself must initialize it to the provided `save_to`.
+- `load_pipeline` does not backfill `init=False` fields after construction. If `save_path_field` is `init=False`, the constructor itself must initialize it to the provided `cache_dir`.
 - `load_pipeline` type hints are intentionally approximate. Runtime checks and this guide define the exact calling constraints.
 
 `load_spec` reads `<save_to>/spec.yaml` for a pipeline class:

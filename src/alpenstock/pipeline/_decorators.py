@@ -251,7 +251,7 @@ def load_spec(
 def load_pipeline(
     *,
     cls: type[_P],
-    save_to: str | Path,
+    cache_dir: str | Path,
     read_only: bool = True,
 ) -> Callable[..., _P]:
     """Build a loader that reopens a pipeline instance from an existing cache directory."""
@@ -259,9 +259,9 @@ def load_pipeline(
         raise TypeError(f"load_pipeline() expects a pipeline class, got {type(cls)!r}")
 
     meta = _require_meta(cls)
-    spec_fields = load_spec(cls, save_to)
+    spec_fields = load_spec(cls, cache_dir)
     if spec_fields is None:
-        spec_file = Path(save_to) / SPEC_FILE_NAME
+        spec_file = Path(cache_dir) / SPEC_FILE_NAME
         raise FileNotFoundError(
             "load_pipeline() requires an existing cache directory with a saved spec file. "
             f"Expected {spec_file}. Run the pipeline once first, or pass a valid cache path."
@@ -282,7 +282,7 @@ def load_pipeline(
             names = ", ".join(repr(item) for item in invalid_keys)
             raise TypeError(
                 "load_pipeline() does not accept overrides for saved spec fields. "
-                f"These values come from {Path(save_to) / SPEC_FILE_NAME}: {names}"
+                f"These values come from {Path(cache_dir) / SPEC_FILE_NAME}: {names}"
             )
 
         invalid_save_keys = sorted(save_override_keys.intersection(overrides))
@@ -290,7 +290,7 @@ def load_pipeline(
             names = ", ".join(repr(item) for item in invalid_save_keys)
             raise TypeError(
                 "load_pipeline() always binds the pipeline save path from the outer "
-                f"`save_to=` argument, so these overrides are not allowed: {names}"
+                f"`cache_dir=` argument, so these overrides are not allowed: {names}"
             )
 
         ctor_kwargs: dict[str, Any] = {}
@@ -301,7 +301,7 @@ def load_pipeline(
                 ctor_kwargs[_field_ctor_key(field)] = value
 
         if save_field.init:
-            ctor_kwargs[_field_ctor_key(save_field)] = save_to
+            ctor_kwargs[_field_ctor_key(save_field)] = cache_dir
 
         ctor_kwargs.update(overrides)
 
@@ -320,7 +320,7 @@ def load_pipeline(
             _validate_loaded_save_path(
                 instance,
                 meta=meta,
-                expected_save_to=save_to,
+                expected_save_to=cache_dir,
             )
 
         runtime = _get_runtime_state(instance)

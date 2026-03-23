@@ -242,7 +242,7 @@ def test_load_pipeline_can_restore_cached_pipeline_without_input_overrides(tmp_p
     p1 = HelperPipeline(spec_a=1, spec_b={"k": 2}, x=10, y=3, save_to=cache)
     p1.run()
 
-    loader = load_pipeline(cls=HelperPipeline, save_to=cache)
+    loader = load_pipeline(cls=HelperPipeline, cache_dir=cache)
     p2 = loader()
 
     assert p2.x is None
@@ -260,7 +260,7 @@ def test_load_pipeline_preserves_explicit_input_overrides_on_cache_hit(tmp_path:
     p1 = HelperPipeline(spec_a=1, spec_b={"k": 2}, x=10, y=3, save_to=cache)
     p1.run()
 
-    loader = load_pipeline(cls=HelperPipeline, save_to=cache)
+    loader = load_pipeline(cls=HelperPipeline, cache_dir=cache)
     p2 = loader(x=77, y=88)
     p2.run()
 
@@ -272,7 +272,7 @@ def test_load_pipeline_preserves_explicit_input_overrides_on_cache_hit(tmp_path:
 
 def test_load_pipeline_missing_spec_file_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="requires an existing cache directory"):
-        load_pipeline(cls=HelperPipeline, save_to=tmp_path / "missing")
+        load_pipeline(cls=HelperPipeline, cache_dir=tmp_path / "missing")
 
 
 def test_load_pipeline_rejects_overrides_for_spec_and_save_path_fields(tmp_path: Path) -> None:
@@ -280,12 +280,12 @@ def test_load_pipeline_rejects_overrides_for_spec_and_save_path_fields(tmp_path:
     p1 = HelperPipeline(spec_a=1, spec_b={"k": 2}, x=10, y=3, save_to=cache)
     p1.run()
 
-    loader = load_pipeline(cls=HelperPipeline, save_to=cache)
+    loader = load_pipeline(cls=HelperPipeline, cache_dir=cache)
 
     with pytest.raises(TypeError, match="spec fields"):
         loader(spec_a=99)
 
-    with pytest.raises(TypeError, match="outer `save_to=` argument"):
+    with pytest.raises(TypeError, match="outer `cache_dir=` argument"):
         loader(save_to=tmp_path / "other-cache")
 
 
@@ -309,7 +309,7 @@ def test_load_pipeline_does_not_auto_fill_required_transient_fields(tmp_path: Pa
     p1 = ExtraTransientPipeline(spec_a=1, x=2, token="abc", save_to=cache)
     p1.run()
 
-    loader = load_pipeline(cls=ExtraTransientPipeline, save_to=cache)
+    loader = load_pipeline(cls=ExtraTransientPipeline, cache_dir=cache)
     with pytest.raises(TypeError):
         loader()
 
@@ -333,7 +333,7 @@ def test_load_pipeline_does_not_backfill_init_false_save_path_field(tmp_path: Pa
     object.__setattr__(p, "save_to", cache)
     p.run()
 
-    loader = load_pipeline(cls=InitFalseSavePathPipeline, save_to=cache)
+    loader = load_pipeline(cls=InitFalseSavePathPipeline, cache_dir=cache)
     with pytest.raises(TypeError, match="cannot set init=False save path fields"):
         loader()
 

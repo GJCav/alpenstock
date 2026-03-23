@@ -355,8 +355,8 @@ packages:
   timestamp: 1650670423406
 - pypi: ./
   name: alpenstock
-  version: 1.4.1
-  sha256: 8ce97d2e7feca7c26c7d07446b4e2d1e1022f692584510bf89ce7d5d1f3a7551
+  version: 1.4.2
+  sha256: 6908c9c6b11496aa51fcadac101604bafee5e1fa3b98991dcde4d3905274dfc6
   requires_dist:
   - loguru>=0.7.0
   - pydantic>=2.3.0
