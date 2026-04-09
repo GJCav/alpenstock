@@ -106,6 +106,7 @@ def _run_pyright(case_file: str) -> PyrightResult:
         "positive/load_pipeline_ok.py",
         "positive/field_helper_args_ok.py",
         "positive/kwonly_required_after_defaults_ok.py",
+        "positive/storage_api_ok.py",
     ],
 )
 def test_pyright_positive_cases(case_file: str) -> None:
