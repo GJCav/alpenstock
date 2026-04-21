@@ -8,7 +8,7 @@ from ._errors import (
     WriteConflictError,
 )
 from ._handles import BinaryFileHandle, FileHandle, TextFileHandle
-from ._schema import define, named
+from ._schema import define, field
 from ._types import OpenMode
 from .dir import Dir, MappedDir, MappedRepo
 from .file import FileNode
@@ -23,11 +23,11 @@ __all__ = [
     "FileHandle",
     "FileCodec",
     "FileNode",
+    "field",
     "HandleStateError",
     "KeyNotFoundError",
     "MappedDir",
     "MappedRepo",
-    "named",
     "OpenMode",
     "Repo",
     "StorageError",

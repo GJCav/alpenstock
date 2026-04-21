@@ -1,5 +1,4 @@
 """Backend packages for alpenstock.storage."""
-from .fs import FilesystemBackend
-from .sqlite import SqliteBackend
+from .fs import FilesystemBlobBackend, JsonlWalJournalBackend
 
-__all__ = ["FilesystemBackend", "SqliteBackend"]
+__all__ = ["FilesystemBlobBackend", "JsonlWalJournalBackend"]

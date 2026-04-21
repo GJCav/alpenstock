@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import os
-import sqlite3
 import subprocess
 import sys
 from pathlib import Path
 
-from alpenstock.storage.backends.fs import FilesystemBackend, RepoLayout
-from alpenstock.storage.backends.sqlite import SqliteBackend, SqliteConfig
+import pytest
+
+from alpenstock.storage import Repo, TransactionStateError
+from alpenstock.storage.backends.fs import FilesystemBlobBackend, JsonlWalJournalBackend, RepoLayout
+from tests.storage._fs_test_utils import assert_no_transaction_artifacts
 
 
 def _run_crash_script(script: str, *, cwd: Path) -> None:
@@ -25,10 +26,11 @@ def test_filesystem_recover_discards_open_state_after_process_exit(tmp_path: Pat
     repo_path = tmp_path / "repo"
     script = f"""
 import os
-from alpenstock.storage.backends.fs import FilesystemBackend
+from alpenstock.storage.backends.fs import FilesystemBlobBackend, JsonlWalJournalBackend
 
-backend = FilesystemBackend()
-tx = backend.begin({str(repo_path)!r})
+blob = FilesystemBlobBackend()
+journal = JsonlWalJournalBackend()
+tx = journal.begin({str(repo_path)!r}, blob)
 handle = tx.open_handle("alpha", "wb")
 handle.write(b"one")
 os._exit(17)
@@ -36,22 +38,24 @@ os._exit(17)
 
     _run_crash_script(script, cwd=tmp_path)
 
-    backend = FilesystemBackend()
+    blob = FilesystemBlobBackend()
+    journal = JsonlWalJournalBackend()
     layout = RepoLayout(repo_path)
-    backend.recover(str(repo_path))
+    journal.recover(str(repo_path), blob)
 
     assert not layout.committed_path("alpha").exists()
-    assert not layout.tx_root.exists()
+    assert_no_transaction_artifacts(repo_path)
 
 
 def test_filesystem_recover_commits_prepared_state_after_process_exit(tmp_path: Path) -> None:
     repo_path = tmp_path / "repo"
     script = f"""
 import os
-from alpenstock.storage.backends.fs import FilesystemBackend
+from alpenstock.storage.backends.fs import FilesystemBlobBackend, JsonlWalJournalBackend
 
-backend = FilesystemBackend()
-tx = backend.begin({str(repo_path)!r})
+blob = FilesystemBlobBackend()
+journal = JsonlWalJournalBackend()
+tx = journal.begin({str(repo_path)!r}, blob)
 with tx.open_handle("alpha", "wb") as handle:
     handle.write(b"one")
 tx.prepare()
@@ -60,28 +64,31 @@ os._exit(17)
 
     _run_crash_script(script, cwd=tmp_path)
 
-    backend = FilesystemBackend()
+    blob = FilesystemBlobBackend()
+    journal = JsonlWalJournalBackend()
     layout = RepoLayout(repo_path)
-    backend.recover(str(repo_path))
+    journal.recover(str(repo_path), blob)
 
     assert layout.committed_path("alpha").read_bytes() == b"one"
-    assert not layout.tx_root.exists()
+    assert_no_transaction_artifacts(repo_path)
 
 
 def test_filesystem_recover_completes_commit_after_process_exit_during_publication(tmp_path: Path) -> None:
     repo_path = tmp_path / "repo"
     script = f"""
 import os
-from alpenstock.storage.backends.fs import FilesystemBackend, RepoLayout
+from alpenstock.storage.backends.fs import FilesystemBlobBackend, JsonlWalJournalBackend, RepoLayout
 
 repo_path = {str(repo_path)!r}
+blob = FilesystemBlobBackend()
+journal = JsonlWalJournalBackend()
+journal.prepare_repo_open(repo_path, blob)
 layout = RepoLayout(repo_path)
 gamma_path = layout.committed_path("gamma")
 gamma_path.parent.mkdir(parents=True, exist_ok=True)
 gamma_path.write_bytes(b"old")
 
-backend = FilesystemBackend()
-tx = backend.begin(repo_path)
+tx = journal.begin(repo_path, blob)
 with tx.open_handle("alpha", "wb") as handle:
     handle.write(b"one")
 with tx.open_handle("beta", "wb") as handle:
@@ -94,80 +101,23 @@ tx.commit()
 
     _run_crash_script(script, cwd=tmp_path)
 
-    backend = FilesystemBackend()
+    blob = FilesystemBlobBackend()
+    journal = JsonlWalJournalBackend()
     layout = RepoLayout(repo_path)
 
     assert layout.committed_path("alpha").read_bytes() == b"one"
     assert not layout.committed_path("beta").exists()
     assert not layout.committed_path("gamma").exists()
+    repo = Repo.open(str(repo_path), blob_backend=blob, journal_backend=journal)
+    with pytest.raises(TransactionStateError, match="pending transaction state"):
+        repo.file("alpha").read_bytes()
 
-    backend.recover(str(repo_path))
+    journal.recover(str(repo_path), blob)
 
     assert layout.committed_path("alpha").read_bytes() == b"one"
     assert layout.committed_path("beta").read_bytes() == b"two"
     assert not layout.committed_path("gamma").exists()
-    assert not layout.tx_root.exists()
-
-
-def test_sqlite_recover_discards_open_state_after_process_exit(tmp_path: Path) -> None:
-    db_path = tmp_path / "repo.db"
-    script = f"""
-import os
-from alpenstock.storage.backends.sqlite import SqliteBackend
-
-backend = SqliteBackend()
-tx = backend.begin({str(db_path)!r})
-handle = tx.open_handle("alpha", "wb")
-handle.write(b"one")
-os._exit(17)
-"""
-
-    _run_crash_script(script, cwd=tmp_path)
-
-    backend = SqliteBackend()
-    backend.recover(str(db_path))
-
-    names = SqliteConfig().schema_names
-    connection = sqlite3.connect(str(db_path))
-    try:
-        rows = list(connection.execute(f'SELECT repo_path, key, value FROM "{names.objects}"'))
-        pending = list(connection.execute(f'SELECT tx_id, repo_path, state FROM "{names.tx_meta}"'))
-    finally:
-        connection.close()
-
-    assert rows == []
-    assert pending == []
-
-
-def test_sqlite_recover_commits_prepared_state_after_process_exit(tmp_path: Path) -> None:
-    db_path = tmp_path / "repo.db"
-    script = f"""
-import os
-from alpenstock.storage.backends.sqlite import SqliteBackend
-
-backend = SqliteBackend()
-tx = backend.begin({str(db_path)!r})
-with tx.open_handle("alpha", "wb") as handle:
-    handle.write(b"one")
-tx.prepare()
-os._exit(17)
-"""
-
-    _run_crash_script(script, cwd=tmp_path)
-
-    backend = SqliteBackend()
-    backend.recover(str(db_path))
-
-    names = SqliteConfig().schema_names
-    connection = sqlite3.connect(str(db_path))
-    try:
-        rows = list(connection.execute(f'SELECT repo_path, key, value FROM "{names.objects}" ORDER BY repo_path, key'))
-        pending = list(connection.execute(f'SELECT tx_id, repo_path, state FROM "{names.tx_meta}"'))
-    finally:
-        connection.close()
-
-    assert rows == [("", "alpha", b"one")]
-    assert pending == []
+    assert_no_transaction_artifacts(repo_path)
 
 
 def test_filesystem_recover_commits_prepared_nested_tree_after_process_exit(tmp_path: Path) -> None:
@@ -175,14 +125,15 @@ def test_filesystem_recover_commits_prepared_nested_tree_after_process_exit(tmp_
     child_repo_path = repo_path / "users" / "alice"
     script = f"""
 import os
-from alpenstock.storage.backends.fs import FilesystemBackend
+from alpenstock.storage.backends.fs import FilesystemBlobBackend, JsonlWalJournalBackend
 
 repo_path = {str(repo_path)!r}
 child_repo_path = {str(child_repo_path)!r}
 
-backend = FilesystemBackend()
-root_tx = backend.begin(repo_path)
-child_tx = backend.begin(child_repo_path, parent_tx=root_tx)
+blob = FilesystemBlobBackend()
+journal = JsonlWalJournalBackend()
+root_tx = journal.begin(repo_path, blob)
+child_tx = journal.begin(child_repo_path, blob, parent_tx=root_tx)
 with root_tx.open_handle("config", "wb") as handle:
     handle.write(b"root")
 with child_tx.open_handle("profile", "wb") as handle:
@@ -195,27 +146,26 @@ os._exit(17)
 
     _run_crash_script(script, cwd=tmp_path)
 
-    backend = FilesystemBackend()
-    backend.recover(str(repo_path))
+    blob = FilesystemBlobBackend()
+    journal = JsonlWalJournalBackend()
+    journal.recover(str(repo_path), blob)
 
     assert (repo_path / "config").read_bytes() == b"root"
     assert (child_repo_path / "profile").read_bytes() == b"alice"
-    assert not RepoLayout(repo_path).tx_root.exists()
+    assert_no_transaction_artifacts(repo_path)
 
 
-def test_sqlite_recover_commits_prepared_nested_tree_after_process_exit(tmp_path: Path) -> None:
-    db_path = tmp_path / "repo.db"
-    child_locator = f"{db_path}::repo::users/alice"
+def test_filesystem_recover_completes_after_root_marked_committing_before_publication(tmp_path: Path) -> None:
+    repo_path = tmp_path / "repo"
+    child_repo_path = repo_path / "users" / "alice"
     script = f"""
 import os
-from alpenstock.storage.backends.sqlite import SqliteBackend
+from alpenstock.storage.backends.fs import FilesystemBlobBackend, JsonlWalJournalBackend
 
-db_path = {str(db_path)!r}
-child_locator = {child_locator!r}
-
-backend = SqliteBackend()
-root_tx = backend.begin(db_path)
-child_tx = backend.begin(child_locator, parent_tx=root_tx)
+blob = FilesystemBlobBackend()
+journal = JsonlWalJournalBackend()
+root_tx = journal.begin({str(repo_path)!r}, blob)
+child_tx = journal.begin({str(child_repo_path)!r}, blob, parent_tx=root_tx)
 with root_tx.open_handle("config", "wb") as handle:
     handle.write(b"root")
 with child_tx.open_handle("profile", "wb") as handle:
@@ -223,76 +173,33 @@ with child_tx.open_handle("profile", "wb") as handle:
 child_tx.prepare()
 root_tx.mark_child_prepared("users/alice")
 root_tx.prepare()
+root_tx.mark_committing()
 os._exit(17)
 """
 
     _run_crash_script(script, cwd=tmp_path)
 
-    backend = SqliteBackend()
-    backend.recover(str(db_path))
+    blob = FilesystemBlobBackend()
+    journal = JsonlWalJournalBackend()
+    journal.recover(str(repo_path), blob)
 
-    names = SqliteConfig().schema_names
-    connection = sqlite3.connect(str(db_path))
-    try:
-        rows = list(connection.execute(f'SELECT repo_path, key, value FROM "{names.objects}" ORDER BY repo_path, key'))
-        pending = list(connection.execute(f'SELECT tx_id, repo_path, state FROM "{names.tx_meta}"'))
-    finally:
-        connection.close()
-
-    assert rows == [
-        ("", "config", b"root"),
-        ("users/alice", "profile", b"alice"),
-    ]
-    assert pending == []
+    assert (repo_path / "config").read_bytes() == b"root"
+    assert (child_repo_path / "profile").read_bytes() == b"alice"
+    assert_no_transaction_artifacts(repo_path)
+    assert_no_transaction_artifacts(child_repo_path)
 
 
-def test_sqlite_recover_prefixed_schema_after_process_exit(tmp_path: Path) -> None:
-    db_path = tmp_path / "repo.db"
-    config = SqliteConfig(schema_prefix="_storage_")
-    names = config.schema_names
+def test_filesystem_read_refuses_after_root_publication_before_child_publication(tmp_path: Path) -> None:
+    repo_path = tmp_path / "repo"
+    child_repo_path = repo_path / "users" / "alice"
     script = f"""
 import os
-from alpenstock.storage.backends.sqlite import SqliteBackend, SqliteConfig
+from alpenstock.storage.backends.fs import FilesystemBlobBackend, JsonlWalJournalBackend
 
-backend = SqliteBackend(config=SqliteConfig(schema_prefix="_storage_"))
-tx = backend.begin({str(db_path)!r})
-with tx.open_handle("alpha", "wb") as handle:
-    handle.write(b"one")
-tx.prepare()
-os._exit(17)
-"""
-
-    _run_crash_script(script, cwd=tmp_path)
-
-    backend = SqliteBackend(config=config)
-    backend.recover(str(db_path))
-
-    connection = sqlite3.connect(str(db_path))
-    try:
-        rows = list(connection.execute(f'SELECT repo_path, key, value FROM "{names.objects}" ORDER BY repo_path, key'))
-        pending = list(connection.execute(f'SELECT tx_id, repo_path, state FROM "{names.tx_meta}"'))
-    finally:
-        connection.close()
-
-    assert rows == [("", "alpha", b"one")]
-    assert pending == []
-
-
-def test_sqlite_recover_prefixed_prepared_nested_tree_after_process_exit(tmp_path: Path) -> None:
-    db_path = tmp_path / "repo.db"
-    child_locator = f"{db_path}::repo::users/alice"
-    config = SqliteConfig(schema_prefix="_storage_")
-    names = config.schema_names
-    script = f"""
-import os
-from alpenstock.storage.backends.sqlite import SqliteBackend, SqliteConfig
-
-db_path = {str(db_path)!r}
-child_locator = {child_locator!r}
-
-backend = SqliteBackend(config=SqliteConfig(schema_prefix="_storage_"))
-root_tx = backend.begin(db_path)
-child_tx = backend.begin(child_locator, parent_tx=root_tx)
+blob = FilesystemBlobBackend()
+journal = JsonlWalJournalBackend()
+root_tx = journal.begin({str(repo_path)!r}, blob)
+child_tx = journal.begin({str(child_repo_path)!r}, blob, parent_tx=root_tx)
 with root_tx.open_handle("config", "wb") as handle:
     handle.write(b"root")
 with child_tx.open_handle("profile", "wb") as handle:
@@ -300,23 +207,64 @@ with child_tx.open_handle("profile", "wb") as handle:
 child_tx.prepare()
 root_tx.mark_child_prepared("users/alice")
 root_tx.prepare()
+root_tx.mark_committing()
+root_tx.publish_prepared()
 os._exit(17)
 """
 
     _run_crash_script(script, cwd=tmp_path)
 
-    backend = SqliteBackend(config=config)
-    backend.recover(str(db_path))
+    blob = FilesystemBlobBackend()
+    journal = JsonlWalJournalBackend()
+    repo = Repo.open(str(repo_path), blob_backend=blob, journal_backend=journal)
 
-    connection = sqlite3.connect(str(db_path))
-    try:
-        rows = list(connection.execute(f'SELECT repo_path, key, value FROM "{names.objects}" ORDER BY repo_path, key'))
-        pending = list(connection.execute(f'SELECT tx_id, repo_path, state FROM "{names.tx_meta}"'))
-    finally:
-        connection.close()
+    assert (repo_path / "config").read_bytes() == b"root"
+    assert not (child_repo_path / "profile").exists()
+    with pytest.raises(TransactionStateError, match="pending transaction state"):
+        repo.file("config").read_bytes()
 
-    assert rows == [
-        ("", "config", b"root"),
-        ("users/alice", "profile", b"alice"),
-    ]
-    assert pending == []
+    journal.recover(str(repo_path), blob)
+
+    assert (repo_path / "config").read_bytes() == b"root"
+    assert (child_repo_path / "profile").read_bytes() == b"alice"
+    assert_no_transaction_artifacts(repo_path)
+    assert_no_transaction_artifacts(child_repo_path)
+
+
+def test_filesystem_recover_cleans_after_child_publication_before_cleanup(tmp_path: Path) -> None:
+    repo_path = tmp_path / "repo"
+    child_repo_path = repo_path / "users" / "alice"
+    script = f"""
+import os
+from alpenstock.storage.backends.fs import FilesystemBlobBackend, JsonlWalJournalBackend
+
+blob = FilesystemBlobBackend()
+journal = JsonlWalJournalBackend()
+root_tx = journal.begin({str(repo_path)!r}, blob)
+child_tx = journal.begin({str(child_repo_path)!r}, blob, parent_tx=root_tx)
+with root_tx.open_handle("config", "wb") as handle:
+    handle.write(b"root")
+with child_tx.open_handle("profile", "wb") as handle:
+    handle.write(b"alice")
+child_tx.prepare()
+root_tx.mark_child_prepared("users/alice")
+root_tx.prepare()
+root_tx.mark_committing()
+root_tx.publish_prepared()
+child_tx.authorize_root_publication()
+child_tx.mark_committing()
+child_tx.publish_prepared()
+os._exit(17)
+"""
+
+    _run_crash_script(script, cwd=tmp_path)
+
+    blob = FilesystemBlobBackend()
+    journal = JsonlWalJournalBackend()
+    journal.recover(str(repo_path), blob)
+    journal.recover(str(repo_path), blob)
+
+    assert (repo_path / "config").read_bytes() == b"root"
+    assert (child_repo_path / "profile").read_bytes() == b"alice"
+    assert_no_transaction_artifacts(repo_path)
+    assert_no_transaction_artifacts(child_repo_path)

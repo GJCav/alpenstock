@@ -15,14 +15,18 @@ from alpenstock.storage import (
     TextFileHandle,
     TransactionContext,
     define,
-    named,
+    field,
 )
-from alpenstock.storage.backends.fs import FilesystemBackend
-from alpenstock.storage.backends.sqlite import SqliteBackend, SqliteConfig
+from alpenstock.storage.backends.fs import FilesystemBlobBackend, JsonlWalJournalBackend
 
 
-backend = FilesystemBackend()
-repo = Repo.open("/tmp/alpenstock-storage-typecheck", backend=backend)
+blob_backend = FilesystemBlobBackend()
+journal_backend = JsonlWalJournalBackend()
+repo = Repo.open(
+    "/tmp/alpenstock-storage-typecheck",
+    blob_backend=blob_backend,
+    journal_backend=journal_backend,
+)
 assert_type(repo, Repo)
 
 file_node = repo.file("alpha")
@@ -63,7 +67,7 @@ with repo.transaction() as tx:
 
 @define
 class SettingsDir(Dir):
-    theme: FileNode = named("theme.toml")
+    theme: FileNode = field(name="theme.toml")
 
 
 @define
@@ -75,15 +79,16 @@ class UserRepo(Repo):
 class AppRepo(Repo):
     settings: SettingsDir
     users: MappedRepo[UserRepo]
-    readme: FileNode = named("README.md")
+    readme: FileNode = field(name="README.md")
 
 
-typed_repo = AppRepo.open("/tmp/alpenstock-storage-typecheck-schema", backend=backend)
+typed_repo = AppRepo.open(
+    "/tmp/alpenstock-storage-typecheck-schema",
+    blob_backend=blob_backend,
+    journal_backend=journal_backend,
+)
 assert_type(typed_repo, AppRepo)
 assert_type(typed_repo.settings, SettingsDir)
 assert_type(typed_repo.users["alice"], UserRepo)
 assert_type(typed_repo.readme.open("rb"), BinaryFileHandle)
 assert_type(typed_repo.readme.open("rb").read(), bytes)
-
-sqlite_backend = SqliteBackend(config=SqliteConfig(schema_prefix="_storage_", busy_timeout_ms=1000))
-assert_type(sqlite_backend, SqliteBackend)

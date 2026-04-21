@@ -89,6 +89,20 @@ def test_read_visible_ref_uses_frozen_overlay_after_prepare() -> None:
     assert tx.read_visible_ref("alpha") == b"2"
 
 
+def test_reopen_prepared_restores_frozen_overlay_as_mutable_state() -> None:
+    tx = TransactionCore(base_state={"alpha": b"1"})
+    tx.put_ref("alpha", b"2")
+    tx.prepare()
+
+    tx.reopen_prepared()
+    tx.put_ref("beta", b"3")
+
+    assert tx.state is TransactionState.OPEN
+    assert tx.prepared_overlay is None
+    assert tx.read_visible_ref("alpha") == b"2"
+    assert tx.read_visible_ref("beta") == b"3"
+
+
 def test_commit_requires_prepared_state() -> None:
     tx = TransactionCore(base_state={"alpha": b"1"})
 

@@ -84,7 +84,7 @@ The most basic usage is declaring a small repo schema and then reading or
 writing files through that schema.
 
 The schema should make the resulting folder structure easy to understand.
-Attribute names normally map directly to storage names, but `storage.named(...)`
+Attribute names normally map directly to storage names, but `storage.field(...)`
 lets the application choose a different filename or directory name when that is
 clearer or more compatible with existing data.
 
@@ -94,20 +94,20 @@ from alpenstock import storage
 
 @storage.define
 class SettingsDir(storage.Dir):
-    profile: storage.FileNode = storage.named("profile.toml")
+    profile: storage.FileNode = storage.field(name="profile.toml")
     flags: storage.FileNode
 
 
 @storage.define
 class UserDir(storage.Dir):
-    notes: storage.FileNode = storage.named("notes.txt")
+    notes: storage.FileNode = storage.field(name="notes.txt")
 
 
 @storage.define
 class AppRepo(storage.Repo):
-    config: storage.FileNode = storage.named("config.toml")
+    config: storage.FileNode = storage.field(name="config.toml")
     settings: SettingsDir
-    users: storage.MappedDir[UserDir] = storage.named("people")
+    users: storage.MappedDir[UserDir] = storage.field(name="people")
 ```
 
 If `repo = AppRepo.open("/path/to/app-data")`, then the schema
@@ -138,8 +138,9 @@ Open the repo:
 repo = AppRepo.open("/path/to/app-data")
 ```
 
-In the intended `v0.2` API, the default backend is the filesystem backend, so
-the basic examples do not need to spell it out.
+In the intended `v0.2` API, the default runtime is the standard local
+filesystem blob backend paired with the JSONL WAL journal backend, so the basic
+examples do not need to spell it out.
 
 Simple reads:
 

@@ -57,6 +57,13 @@ publication mechanics. The journal backend is responsible for the transaction
 lifecycle, single-writer discipline, nested coordination, root commit
 authority, and recovery authority.
 
+The same split also determines where live concurrency control belongs. The
+blob backend may persist tree-discovery metadata and the blob-side fence, but
+the primary live lock manager belongs to the journal backend. This keeps
+heterogeneous blob backends from having to pretend they share one native
+locking primitive. The hierarchical locking protocol is defined separately in
+`05 - Locking and concurrency.md`.
+
 This division is not merely an implementation detail. It is the architectural
 condition that makes backend extensibility compatible with one stable
 transaction model.

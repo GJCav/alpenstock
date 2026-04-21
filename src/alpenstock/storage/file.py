@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast, overload
+from typing import TYPE_CHECKING, Any, cast, overload
 
 import attrs
 
@@ -37,12 +37,23 @@ class FileNode:
     ) -> BinaryFileHandle: ...
 
     def open(self, mode: OpenMode = "r", *, encoding: str | None = None) -> FileHandle:
+        self.repo._assert_raw_key_allowed(self.key)
         active_tx = self.repo.active_transaction
         if active_tx is not None:
-            return cast(FileHandle, active_tx.backend_tx.open_handle(self.key, mode, encoding=encoding))
+            if active_tx.parent is not None and active_tx.is_prepared and mode not in _READ_ONLY_MODES:
+                return cast(
+                    FileHandle,
+                    _ImplicitTransactionHandle.start_existing(active_tx, self.key, mode, encoding=encoding),
+                )
+            return cast(FileHandle, active_tx.open(self.key, cast(Any, mode), encoding=encoding))
 
         if mode in _READ_ONLY_MODES:
-            return self.repo.backend.open_committed_handle(
+            if self.repo._nearest_active_ancestor_transaction() is None:
+                self.repo.journal_backend.require_clear_for_read(
+                    self.repo.repo_locator,
+                    self.repo.blob_backend,
+                )
+            return self.repo.blob_backend.open_committed_handle(
                 self.repo.repo_locator,
                 self.key,
                 mode,
@@ -72,8 +83,18 @@ class FileNode:
             handle.write(text)
 
     def delete(self) -> None:
+        self.repo._assert_raw_key_allowed(self.key)
         active_tx = self.repo.active_transaction
         if active_tx is not None:
+            if active_tx.parent is not None and active_tx.is_prepared:
+                active_tx.__enter__()
+                try:
+                    active_tx.delete(self.key)
+                except Exception as exc:
+                    active_tx.__exit__(type(exc), exc, exc.__traceback__)
+                    raise
+                active_tx.__exit__(None, None, None)
+                return
             active_tx.delete(self.key)
             return
 
@@ -115,12 +136,29 @@ class _ImplicitTransactionHandle:
         tx = repo.transaction()
         tx.__enter__()
         try:
-            handle = cast(FileHandle, tx.backend_tx.open_handle(key, mode, encoding=encoding))
+            handle = cast(FileHandle, tx.open(key, cast(Any, mode), encoding=encoding))
         except Exception as exc:
             if tx.parent is None:
                 tx.__exit__(type(exc), exc, exc.__traceback__)
             else:
                 tx._cancel_child_setup_failure(remove_participant=preexisting_tx is None)
+            raise
+        return cls(tx=tx, handle=handle)
+
+    @classmethod
+    def start_existing(
+        cls,
+        tx: TransactionContext,
+        key: str,
+        mode: OpenMode,
+        *,
+        encoding: str | None = None,
+    ) -> _ImplicitTransactionHandle:
+        tx.__enter__()
+        try:
+            handle = cast(FileHandle, tx.open(key, cast(Any, mode), encoding=encoding))
+        except Exception as exc:
+            tx.__exit__(type(exc), exc, exc.__traceback__)
             raise
         return cls(tx=tx, handle=handle)
 

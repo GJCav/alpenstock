@@ -13,15 +13,12 @@ from benchmarks.storage_bench.scenario import (
 )
 
 
-def test_setup_seed_state_builds_workspace_for_fs_and_sqlite(tmp_path: Path) -> None:
+def test_setup_seed_state_builds_workspace_for_fs(tmp_path: Path) -> None:
     fs_root = tmp_path / "fs"
-    sqlite_root = tmp_path / "sqlite"
 
     fs_locator = setup_seed_state("fs", fs_root, blob_size_bytes=1024 * 1024, seed=7)
-    sqlite_locator = setup_seed_state("sqlite", sqlite_root, blob_size_bytes=1024 * 1024, seed=7)
 
     assert Path(fs_locator).exists()
-    assert Path(sqlite_locator).exists()
 
 
 def test_rawfs_direct_commit_case_produces_expected_final_tree(tmp_path: Path) -> None:
@@ -78,9 +75,9 @@ def test_transactional_commit_and_rollback_cases_leave_expected_state(tmp_path: 
         seed=13,
     )
     rollback_result = run_benchmark_case(
-        "sqlite",
+        "fs",
         "rollback",
-        iteration_root=tmp_path / "sqlite-rollback",
+        iteration_root=tmp_path / "fs-rollback",
         iteration=0,
         blob_size_bytes=1024 * 1024,
         seed=14,
@@ -88,7 +85,7 @@ def test_transactional_commit_and_rollback_cases_leave_expected_state(tmp_path: 
 
     assert commit_result.record.phase_ns["commit_ns"] >= 0
     assert commit_result.record.phase_ns["prepare_ns"] >= 0
-    validate_rollback_state("sqlite", rollback_result.repo_locator)
+    validate_rollback_state("fs", rollback_result.repo_locator)
 
 
 def test_report_json_and_summary_are_parseable(tmp_path: Path) -> None:
@@ -133,7 +130,7 @@ def test_cli_parser_and_timing_keys() -> None:
 
 def test_benchmark_record_contains_required_phase_keys(tmp_path: Path) -> None:
     record = run_benchmark_case(
-        "sqlite",
+        "fs",
         "commit",
         iteration_root=tmp_path / "iter-1",
         iteration=1,

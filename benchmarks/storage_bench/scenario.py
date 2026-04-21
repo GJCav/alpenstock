@@ -9,13 +9,11 @@ from pathlib import Path
 from typing import BinaryIO, Callable, Literal, Protocol, TextIO, cast
 
 from alpenstock.storage import Dir, FileNode, KeyNotFoundError, MappedDir, MappedRepo, Repo, define
-from alpenstock.storage.backends.fs import FilesystemBackend
-from alpenstock.storage.backends.sqlite import SqliteBackend
 
 from .report import BenchmarkRecord
 
-BackendName = Literal["fs", "sqlite", "rawfs_direct", "rawfs_staged"]
-BackendChoice = Literal["fs", "sqlite", "rawfs", "rawfs_direct", "rawfs_staged"]
+BackendName = Literal["fs", "rawfs_direct", "rawfs_staged"]
+BackendChoice = Literal["fs", "rawfs", "rawfs_direct", "rawfs_staged"]
 
 
 class _RawFsNode(Protocol):
@@ -116,9 +114,8 @@ def setup_seed_state(
         _setup_seed_state_rawfs(workspace_root, blob_size_bytes=blob_size_bytes, seed=seed)
         return str(workspace_root)
 
-    backend = _make_backend(backend_name)
     repo_locator = _repo_locator(backend_name, artifact_root)
-    repo = WorkspaceRepo.open(repo_locator, backend=backend)
+    repo = WorkspaceRepo.open(repo_locator)
     _setup_seed_state_storage(repo, blob_size_bytes=blob_size_bytes, seed=seed)
     return repo_locator
 
@@ -148,8 +145,7 @@ def run_benchmark_case(
             seed=seed,
         )
     else:
-        backend = _make_backend(backend_name)
-        repo = WorkspaceRepo.open(repo_locator, backend=backend)
+        repo = WorkspaceRepo.open(repo_locator)
         record = _run_storage_case(
             repo=repo,
             backend_name=backend_name,
@@ -169,8 +165,7 @@ def validate_commit_state(backend_name: BackendName, repo_locator: str) -> None:
         assert (root / "datasets" / "dataset-0" / "blob").stat().st_size > 0
         return
 
-    backend = _make_backend(backend_name)
-    repo = WorkspaceRepo.open(repo_locator, backend=backend)
+    repo = WorkspaceRepo.open(repo_locator)
     assert "bench-commit" in repo.manifest.read_text()
     assert repo.settings.runtime.read_text() == _small_text_payload("settings-runtime-commit", 4096, 17)
     try:
@@ -197,8 +192,7 @@ def validate_rollback_state(backend_name: BackendName, repo_locator: str) -> Non
         )
         return
 
-    backend = _make_backend(backend_name)
-    repo = WorkspaceRepo.open(repo_locator, backend=backend)
+    repo = WorkspaceRepo.open(repo_locator)
     assert "bench-commit" not in repo.manifest.read_text()
     assert repo.settings.runtime.read_text() == _small_text_payload("settings-runtime-seed", 4096, 3)
     assert repo.file("scratch/transient.log").read_text() == _small_text_payload("transient-seed", 1024, 4)
@@ -567,19 +561,9 @@ def _setup_seed_state_rawfs(root: Path, *, blob_size_bytes: int, seed: int) -> N
             )
 
 
-def _make_backend(backend_name: BackendName) -> FilesystemBackend | SqliteBackend:
-    if backend_name == "fs":
-        return FilesystemBackend()
-    if backend_name == "sqlite":
-        return SqliteBackend()
-    raise ValueError(f"Unsupported transactional backend {backend_name!r}")
-
-
 def _repo_locator(backend_name: BackendName, artifact_root: Path) -> str:
     if backend_name == "fs":
         return str(artifact_root / "workspace")
-    if backend_name == "sqlite":
-        return str(artifact_root / "workspace.db")
     raise ValueError(f"Raw filesystem baseline uses direct paths, not repo locators: {backend_name!r}")
 
 

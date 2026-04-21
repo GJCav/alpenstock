@@ -12,7 +12,7 @@ from ..._types import DELETE, OverlayEntry, Put
 from .layout import RepoLayout, STAGED_DIRNAME
 from .refs import FsStagedValueRef, FsValueRef, resolve_value_ref_path
 
-WalState = Literal["open", "prepared"]
+WalState = Literal["open", "prepared", "committing"]
 _CRASH_AFTER_PUBLICATION_OPS_ENV = "ALPENSTOCK_FS_CRASH_AFTER_PUBLICATION_OPS"
 ChildWalState = dict[str, dict[str, bool]]
 WalRecord = dict[str, object]
@@ -29,9 +29,9 @@ class WalReplay:
 def append_wal_record(layout: RepoLayout, record: WalRecord) -> None:
     path = layout.wal_path
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        json.dump(record, handle, sort_keys=True)
-        handle.write("\n")
+    line = (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    with path.open("ab") as handle:
+        handle.write(line)
 
 
 def wal_state_record(state: WalState) -> WalRecord:
@@ -53,13 +53,12 @@ def wal_overlay_record(layout: RepoLayout, key: str, entry: OverlayEntry[FsValue
     }
 
 
-def wal_child_record(layout: RepoLayout, repo_path: str, *, prepared: bool, committed: bool) -> WalRecord:
+def wal_child_record(layout: RepoLayout, repo_path: str, *, prepared: bool) -> WalRecord:
     layout.committed_path(repo_path)
     return {
         "kind": "child",
         "repo_path": repo_path,
         "prepared": prepared,
-        "committed": committed,
     }
 
 
@@ -81,6 +80,7 @@ def wal_coordinated_child_record(parent_repo_locator: str) -> WalRecord:
 
 
 def load_wal_replay(layout: RepoLayout) -> WalReplay:
+    _truncate_torn_final_record(layout.wal_path)
     state_box: list[WalState] = ["open"]
     overlay: dict[str, OverlayEntry[FsValueRef]] = {}
     children: ChildWalState = {}
@@ -113,6 +113,16 @@ def load_wal_replay(layout: RepoLayout) -> WalReplay:
         children=children,
         parent_repo_locator=parent_repo_locator_box[0],
     )
+
+
+def _truncate_torn_final_record(path: Path) -> None:
+    payload = path.read_bytes()
+    if not payload or payload.endswith(b"\n"):
+        return
+    previous_newline = payload.rfind(b"\n")
+    truncate_at = 0 if previous_newline < 0 else previous_newline + 1
+    with path.open("r+b") as handle:
+        handle.truncate(truncate_at)
 
 
 def load_wal(layout: RepoLayout) -> tuple[WalState, dict[str, OverlayEntry[FsValueRef]], ChildWalState]:
@@ -176,25 +186,6 @@ def apply_overlay_to_repo(
         committed_path.parent.mkdir(parents=True, exist_ok=True)
         os.replace(source_path, committed_path)
         _maybe_crash_after_publication_op()
-
-
-def recover_repo(layout: RepoLayout) -> None:
-    if not layout.tx_root.exists():
-        return
-    if not layout.wal_path.exists():
-        layout.cleanup_tx_root()
-        return
-    replay = load_wal_replay(layout)
-    if replay.parent_repo_locator is not None:
-        raise TransactionStateError(
-            f"Cannot recover coordinated filesystem child repo {str(layout.repo_root)!r} directly; "
-            f"recover coordinator repo {replay.parent_repo_locator!r}"
-        )
-    if replay.children:
-        raise TransactionStateError("recover_repo() cannot recover coordinated filesystem parent transactions")
-    if replay.state == "prepared":
-        apply_overlay_to_repo(layout, replay.overlay, allow_missing_published_puts=True)
-    layout.cleanup_tx_root()
 
 
 def _maybe_crash_after_publication_op() -> None:
@@ -317,7 +308,7 @@ def _apply_wal_record(
     kind = payload.get("kind")
     if kind == "state":
         raw_state = payload.get("state")
-        if raw_state not in {"open", "prepared"}:
+        if raw_state not in {"open", "prepared", "committing"}:
             raise TransactionStateError(f"Unknown filesystem WAL state {raw_state!r} on line {line_number}")
         state_box[0] = cast(WalState, raw_state)
         return
@@ -345,15 +336,13 @@ def _apply_wal_record(
         if not isinstance(repo_path, str):
             raise TransactionStateError(f"Filesystem WAL child record on line {line_number} is malformed")
         prepared = payload.get("prepared", False)
-        committed = payload.get("committed", False)
-        if not isinstance(prepared, bool) or not isinstance(committed, bool):
+        if not isinstance(prepared, bool):
             raise TransactionStateError(
-                f"Filesystem WAL child record on line {line_number} must use boolean prepared/committed fields"
+                f"Filesystem WAL child record on line {line_number} must use a boolean prepared field"
             )
         layout.committed_path(repo_path)
         children[repo_path] = {
             "prepared": prepared,
-            "committed": committed,
         }
         return
 
@@ -391,7 +380,6 @@ __all__ = [
     "apply_overlay_to_repo",
     "load_wal",
     "load_wal_replay",
-    "recover_repo",
     "validate_overlay_publication",
     "validated_staged_relpath",
     "wal_child_record",

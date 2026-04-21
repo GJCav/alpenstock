@@ -34,7 +34,7 @@ class Dir:
     _prefix: str = attrs.field(default="", init=False, repr=False)
 
     def file(self, key: str) -> FileNode:
-        return FileNode(repo=self._repo, key=self._join(key))
+        return FileNode(repo=self._repo, key=self._repo._assert_raw_key_allowed(self._join(key)))
 
     def _bind(self, repo: Repo, prefix: str) -> Dir:
         self._repo = repo
@@ -70,8 +70,19 @@ class Dir:
         if kind == "repo":
             repo_type = cast(type[Repo], target)
             parent_repo = self._repo
-            child_locator = parent_repo.backend.child_repo_locator(parent_repo.repo_locator, child_prefix)
-            child_repo = repo_type(backend=parent_repo.backend, repo_locator=child_locator)
+            child_locator = parent_repo.blob_backend.child_repo_locator(parent_repo.repo_locator, child_prefix)
+            coordination_root = parent_repo.journal_backend.prepare_repo_open(
+                child_locator,
+                parent_repo.blob_backend,
+                parent_repo_locator=parent_repo.repo_locator,
+                child_repo_path=child_prefix,
+            )
+            child_repo = repo_type(
+                blob_backend=parent_repo.blob_backend,
+                journal_backend=parent_repo.journal_backend,
+                repo_locator=child_locator,
+                coordination_root_locator=coordination_root,
+            )
             child_repo._bind_schema_runtime(parent_repo=parent_repo, child_repo_path=child_prefix)
             return child_repo
         if kind == "mapped_dir":
@@ -138,8 +149,19 @@ class MappedRepo(Generic[TRepo]):
             return cached
 
         child_repo_path = join_logical_key(self._prefix, component)
-        child_locator = self._repo.backend.child_repo_locator(self._repo.repo_locator, child_repo_path)
-        child_repo = self._repo_type(backend=self._repo.backend, repo_locator=child_locator)
+        child_locator = self._repo.blob_backend.child_repo_locator(self._repo.repo_locator, child_repo_path)
+        coordination_root = self._repo.journal_backend.prepare_repo_open(
+            child_locator,
+            self._repo.blob_backend,
+            parent_repo_locator=self._repo.repo_locator,
+            child_repo_path=child_repo_path,
+        )
+        child_repo = self._repo_type(
+            blob_backend=self._repo.blob_backend,
+            journal_backend=self._repo.journal_backend,
+            repo_locator=child_locator,
+            coordination_root_locator=coordination_root,
+        )
         child_repo._bind_schema_runtime(parent_repo=self._repo, child_repo_path=child_repo_path)
         self._cache[component] = child_repo
         return child_repo

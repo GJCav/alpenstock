@@ -16,8 +16,7 @@ Useful options:
 
 The benchmark compares:
 
-- `FilesystemBackend`
-- `SqliteBackend`
+- `FilesystemBlobBackend` + `JsonlWalJournalBackend`
 - `rawfs_direct`, a direct-I/O no-transaction lower bound
 - `rawfs_staged`, a staged-I/O lower bound that writes through fresh staged files and publishes with `os.replace`
 

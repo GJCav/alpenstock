@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Literal
 
 import attrs
 
@@ -13,10 +13,14 @@ if os.name == "posix":
 else:
     fcntl = None
 
+LockMode = Literal["shared", "exclusive"]
+
 
 @attrs.define(slots=True)
 class WriterLock:
     path: Path = attrs.field(converter=Path)
+    mode: LockMode = attrs.field(default="exclusive")
+    blocking: bool = attrs.field(default=False)
     _file: BinaryIO | None = attrs.field(default=None, init=False, repr=False)
 
     @property
@@ -27,15 +31,20 @@ class WriterLock:
         if self._file is not None:
             return
         if fcntl is None:
-            raise RuntimeError("Filesystem backend writer locking currently supports POSIX only")
+            raise RuntimeError("Filesystem writer locking currently supports POSIX only")
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
         lock_file = self.path.open("a+b")
+        flock_mode = fcntl.LOCK_SH if self.mode == "shared" else fcntl.LOCK_EX
+        if not self.blocking:
+            flock_mode |= fcntl.LOCK_NB
         try:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(lock_file.fileno(), flock_mode)
         except BlockingIOError as exc:
             lock_file.close()
-            raise WriteConflictError(f"Another write transaction already owns repo lock {self.path}") from exc
+            raise WriteConflictError(
+                f"Another write transaction already owns repo lock {self.path} with an incompatible mode"
+            ) from exc
         except Exception:
             lock_file.close()
             raise
@@ -53,4 +62,31 @@ class WriterLock:
             lock_file.close()
 
 
-__all__ = ["WriterLock"]
+@attrs.define(slots=True)
+class HierarchicalLockSet:
+    locks: list[WriterLock] = attrs.field(factory=list, repr=False)
+
+    @classmethod
+    def acquire(cls, lock_plan: list[tuple[Path, LockMode]]) -> HierarchicalLockSet:
+        acquired: list[WriterLock] = []
+        try:
+            for path, mode in lock_plan:
+                lock = WriterLock(path, mode=mode)
+                lock.acquire()
+                acquired.append(lock)
+        except BaseException:
+            for lock in reversed(acquired):
+                lock.release()
+            raise
+        return cls(locks=acquired)
+
+    @property
+    def acquired(self) -> bool:
+        return any(lock.acquired for lock in self.locks)
+
+    def release(self) -> None:
+        for lock in reversed(self.locks):
+            lock.release()
+
+
+__all__ = ["HierarchicalLockSet", "LockMode", "WriterLock"]

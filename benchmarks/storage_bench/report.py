@@ -165,7 +165,6 @@ def _render_table(headers: list[str], rows: list[list[str]]) -> str:
 def _backend_label(backend: str) -> str:
     return {
         "fs": "fs",
-        "sqlite": "sqlite",
         "rawfs_direct": "rawfs_direct",
         "rawfs_staged": "rawfs_staged",
     }.get(backend, backend)

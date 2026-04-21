@@ -6,7 +6,7 @@ It fixes four decisions that shape the rest of the design:
 
 - transactions use copy-on-write staging
 - the isolation level is read-committed
-- only one active write transaction exists for one repo tree at a time
+- write concurrency is controlled by hierarchical repo-tree locking
 - nested transactions follow classic closed nested transaction semantics
 
 ## 1. Repo tree and ownership
@@ -206,10 +206,16 @@ final effect is authorized only at the root.
 
 The model is intentionally built around a single-writer discipline.
 
-At the repo-tree level, there may be at most one active write transaction at a
-time. This is the design's main simplification. It removes the need for
-multi-writer conflict resolution and keeps the recovery story small enough to be
-explained precisely.
+At the repo level, there may be at most one active independent writer for the
+same repo ownership domain at a time. This is the design's main simplification.
+It removes the need for multi-writer conflict resolution and keeps the recovery
+story small enough to be explained precisely.
+
+The tree structure allows this rule to be enforced without always taking one
+exclusive lock over the whole tree. A later concurrency note defines the exact
+hierarchical locking discipline: independent writers acquire locks top-down,
+retain intention locks on ancestors, and take an exclusive lock only over the
+repo subtree they actually write.
 
 Within one transaction, there may also be at most one active writable handle
 for the same logical key at a time. The reason is similar. Multiple open

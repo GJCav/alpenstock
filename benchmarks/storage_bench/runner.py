@@ -20,7 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Microbenchmark the alpenstock storage backends.")
     parser.add_argument(
         "--backend",
-        choices=["fs", "sqlite", "rawfs", "rawfs_direct", "rawfs_staged", "rawfs_all", "all"],
+        choices=["fs", "rawfs", "rawfs_direct", "rawfs_staged", "rawfs_all", "all"],
         default="all",
     )
     parser.add_argument("--scenario", choices=["commit", "rollback", "all"], default="all")
@@ -38,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.backend == "all":
-        backend_names: list[BackendName] = ["fs", "sqlite", "rawfs_direct", "rawfs_staged"]
+        backend_names: list[BackendName] = ["fs", "rawfs_direct", "rawfs_staged"]
     elif args.backend == "rawfs_all":
         backend_names = ["rawfs_direct", "rawfs_staged"]
     else:

@@ -103,6 +103,16 @@ class TransactionCore(Generic[TValueRef]):
         self._prepared_overlay = None
         self._state = TransactionState.COMMITTED
 
+    def reopen_prepared(self) -> None:
+        if self._state is not TransactionState.PREPARED:
+            raise TransactionStateError(
+                f"reopen_prepared() requires state 'prepared', got {self._state.value!r}"
+            )
+        assert self._prepared_overlay is not None
+        self._overlay = dict(self._prepared_overlay)
+        self._prepared_overlay = None
+        self._state = TransactionState.OPEN
+
     def rollback(self) -> None:
         if self._state not in (TransactionState.OPEN, TransactionState.PREPARED):
             raise TransactionStateError(
