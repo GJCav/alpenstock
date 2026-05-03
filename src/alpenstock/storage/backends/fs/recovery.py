@@ -249,6 +249,7 @@ def validate_overlay_publication(
     ]
     _validate_put_sources(put_items, layout=layout, allow_missing_published_puts=allow_missing_published_puts)
     _validate_put_path_conflicts(put_items)
+    _validate_put_ancestor_file_blockers(path_map, overlay, repo_root=layout.repo_root)
     _validate_child_repo_boundaries(path_map, layout=layout, child_repo_paths=child_repo_paths or set())
 
 
@@ -264,6 +265,31 @@ def _validate_put_path_conflicts(
                 raise TransactionStateError(
                     f"Prepared filesystem overlay contains conflicting put keys {key!r} and {other_key!r}"
                 )
+
+
+def _validate_put_ancestor_file_blockers(
+    path_map: dict[str, Path],
+    overlay: dict[str, OverlayEntry[FsValueRef]],
+    *,
+    repo_root: Path,
+) -> None:
+    for key, committed_path in path_map.items():
+        if overlay[key] is DELETE:
+            continue
+        for ancestor_key, ancestor_path in path_map.items():
+            if ancestor_key == key or overlay[ancestor_key] is not DELETE:
+                continue
+            if ancestor_path in committed_path.parents:
+                break
+        else:
+            for ancestor_path in committed_path.parents:
+                if ancestor_path == repo_root.parent:
+                    break
+                if ancestor_path.is_file():
+                    raise TransactionStateError(
+                        f"Prepared filesystem overlay put key {key!r} is blocked by committed file "
+                        f"{ancestor_path.as_posix()!r}; delete the ancestor file in the same transaction"
+                    )
 
 
 def _validate_child_repo_boundaries(

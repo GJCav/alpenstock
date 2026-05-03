@@ -94,6 +94,13 @@ class Repo(Dir):
         return TransactionContext(repo=self)
 
     def file(self, key: str) -> FileNode:
+        """Return a raw file node for internal/debug/testing use.
+
+        Prefer schema-declared ``FileNode`` attributes in application code.
+        This raw escape hatch only enforces repo-boundary ownership checks; it
+        does not make arbitrary filesystem shape conflicts part of the public
+        schema contract.
+        """
         from .file import FileNode
 
         return FileNode(repo=self, key=self._assert_raw_key_allowed(key))

@@ -34,6 +34,13 @@ class Dir:
     _prefix: str = attrs.field(default="", init=False, repr=False)
 
     def file(self, key: str) -> FileNode:
+        """Return a raw file node under this directory for internal/debug/testing use.
+
+        Prefer schema-declared ``FileNode`` attributes in application code.
+        This raw escape hatch only enforces repo-boundary ownership checks; it
+        does not make arbitrary filesystem shape conflicts part of the public
+        schema contract.
+        """
         return FileNode(repo=self._repo, key=self._repo._assert_raw_key_allowed(self._join(key)))
 
     def _bind(self, repo: Repo, prefix: str) -> Dir:

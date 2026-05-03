@@ -1233,6 +1233,23 @@ def test_recover_supports_file_to_subtree_replacement_after_partial_publication(
     assert not layout.committed_path("a").is_file()
 
 
+def test_prepare_rejects_file_to_subtree_replacement_without_delete(tmp_path: Path) -> None:
+    backend = FsRuntime()
+    layout = RepoLayout(tmp_path)
+    init_repo_metadata(tmp_path, runtime=backend)
+    root_file = layout.committed_path("a")
+    root_file.parent.mkdir(parents=True, exist_ok=True)
+    root_file.write_bytes(b"old")
+
+    tx = backend.begin(str(tmp_path))
+    _write_bytes(tx, "a/b", b"child")
+
+    with pytest.raises(TransactionStateError, match="blocked by committed file"):
+        tx.prepare()
+
+    tx.rollback()
+
+
 def test_recover_rejects_staged_path_escaping_tx_root(tmp_path: Path) -> None:
     backend = FsRuntime()
     layout = RepoLayout(tmp_path)
